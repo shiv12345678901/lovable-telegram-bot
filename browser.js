@@ -110,6 +110,8 @@ export async function scrapeProjects(session) {
       .filter(item => item.href.includes('/projects/') || item.href.includes('/workspace/'));
   });
 
+  console.log(`[Browser] Scraped ${rawProjects.length} raw links.`);
+
   const uniqueProjects = [];
   const seenUrls = new Set();
 
@@ -130,7 +132,19 @@ export async function scrapeProjects(session) {
     }
   }
 
-  console.log(`[Browser] Found ${uniqueProjects.length} projects.`);
+  if (uniqueProjects.length === 0) {
+    const diagnostics = await session.page.evaluate(() => {
+      return {
+        title: document.title,
+        bodyLen: (document.body?.innerText || '').length,
+        htmlSnippet: (document.body?.innerHTML || '').slice(0, 500),
+        anchorsCount: document.querySelectorAll('a').length
+      };
+    });
+    console.warn('[Browser] ⚠️ 0 projects matched filters. Diagnostics:', diagnostics);
+  }
+
+  console.log(`[Browser] Scraped and filtered ${uniqueProjects.length} unique projects.`);
   session.projects = uniqueProjects;
   return uniqueProjects;
 }
