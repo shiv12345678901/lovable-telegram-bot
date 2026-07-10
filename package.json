@@ -1,0 +1,16 @@
+{
+  "name": "lovable-telegram-bot",
+  "version": "1.0.0",
+  "description": "Telegram remote dashboard and prompt controller for Lovable.dev",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "verify": "node verify.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "playwright": "^1.45.1",
+    "telegraf": "^4.16.3"
+  }
+}

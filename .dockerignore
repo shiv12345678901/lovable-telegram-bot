@@ -1,0 +1,12 @@
+node_modules
+.env
+*.log
+*.png
+*.jpg
+*.jpeg
+.git
+.github
+.gitignore
+debug-workspace.js
+verify.js
+verification-screenshot.png
