@@ -14,7 +14,7 @@ COPY --chown=pwuser:pwuser package*.json ./
 RUN node -e "const p = require('./package.json'); p.dependencies.playwright = '1.45.1'; require('fs').writeFileSync('./package.json', JSON.stringify(p, null, 2))"
 
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-RUN npm ci --production
+RUN npm install --production --no-audit --no-fund
 
 # Copy application files
 COPY --chown=pwuser:pwuser *.js ./
