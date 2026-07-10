@@ -1,4 +1,4 @@
-# Playwright Docker base image — includes Chromium + all Linux dependencies
+# Playwright Docker base image — aligned to version v1.45.1 to match package locks and keep build light and reliable
 FROM mcr.microsoft.com/playwright:v1.45.1-jammy
 
 WORKDIR /app
@@ -9,6 +9,10 @@ RUN chown -R pwuser:pwuser /app
 
 # Copy package configuration
 COPY --chown=pwuser:pwuser package*.json ./
+
+# Force exact version in package.json to match base image so no mismatch occurs on installation
+RUN node -e "const p = require('./package.json'); p.dependencies.playwright = '1.45.1'; require('fs').writeFileSync('./package.json', JSON.stringify(p, null, 2))"
+
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN npm ci --production
 
