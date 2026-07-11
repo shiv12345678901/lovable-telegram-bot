@@ -16,6 +16,7 @@ const btnCancel = document.getElementById('btn-cancel');
 const btnSnapshot = document.getElementById('btn-snapshot');
 const btnReloadDashboard = document.getElementById('btn-reload-dashboard');
 const btnStopBrowser = document.getElementById('btn-stop-browser');
+const btnStartInstance = document.getElementById('btn-start-instance');
 
 let activeProjectIndex = null;
 let currentProjectList = [];
@@ -270,6 +271,17 @@ btnStopBrowser.onclick = () => {
   addChatBubble('🛑 Terminating Chromium backend connection...', 'system');
   setLoading(false);
 };
+
+btnStartInstance.onclick = () => {
+  addChatBubble('🟢 Starting browser instance...', 'system');
+  socket.emit('start-session');
+};
+
+socket.on('session-started', (data) => {
+  addChatBubble('✅ Chromium backend instance started successfully.', 'system');
+  statusBadge.className = 'status-indicator active';
+  statusBadge.innerHTML = '<span class="dot"></span> Connected';
+});
 
 // Input event listener
 promptInput.oninput = () => {

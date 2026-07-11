@@ -11,6 +11,7 @@ import dotenv from 'dotenv';
 import { setupBot } from './bot.js';
 import sessionManager from './state.js';
 import {
+  initBrowser,
   scrapeProjects,
   openProjectWorkspace,
   submitPrompt,
@@ -198,6 +199,18 @@ io.on('connection', (socket) => {
       socket.emit('snapshot-capture', { img: base64Image });
       await fs.promises.unlink(snapshotPath).catch(() => {});
     } catch (err) {
+      socket.emit('operation-failed', { error: err.message });
+    }
+  });
+
+  socket.on('start-session', async () => {
+    try {
+      console.log('[WebSocket] Starting browser instance from web UI...');
+      const session = sessionManager.getSession(DEFAULT_CHAT_ID);
+      await initBrowser(session);
+      socket.emit('session-started', { status: 'running' });
+    } catch (err) {
+      console.error('[WebSocket] Failed to start browser instance:', err.message);
       socket.emit('operation-failed', { error: err.message });
     }
   });

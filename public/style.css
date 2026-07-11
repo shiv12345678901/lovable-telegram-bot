@@ -144,6 +144,11 @@ body {
   border-color: rgba(244, 63, 94, 0.2);
   color: var(--accent-red);
 }
+.action-btn.success-hover:hover {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: var(--accent-green);
+}
 
 /* Workspace Area */
 .workspace-area {
