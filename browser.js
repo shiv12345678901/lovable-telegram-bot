@@ -254,7 +254,7 @@ export async function openProjectWorkspace(session, projectUrl) {
 }
 
 /**
- * Submit a prompt into Lovable's chat UI via the extension's floating input box.
+ * Submit a prompt into Lovable's chat UI via the extension's sidepanel page directly or floating input box.
  */
 export async function submitPrompt(session, promptText) {
   const { page } = session;
@@ -263,16 +263,61 @@ export async function submitPrompt(session, promptText) {
   const text = String(promptText || '').trim();
   if (!text) throw new Error('Prompt text is empty.');
 
-  console.log('[Browser] Submitting prompt via Extension UI input box...');
+  console.log('[Browser] Resolving Extension ID from service worker...');
+  let extensionId = '';
+  try {
+    const serviceWorker = session.context.serviceWorkers()[0]
+      || await session.context.waitForEvent("serviceworker", { timeout: 10000 });
+    if (serviceWorker) {
+      extensionId = serviceWorker.url().split('/')[2];
+      console.log(`[Browser] Found Extension ID: ${extensionId}`);
+    }
+  } catch (err) {
+    console.warn('[Browser] Could not resolve extension ID from service worker:', err.message);
+  }
 
-  // Wait for the extension textarea to load
+  if (extensionId) {
+    console.log(`[Browser] Opening extension sidepanel page in a new tab...`);
+    const sidepanelPage = await session.context.newPage();
+    try {
+      await sidepanelPage.goto(`chrome-extension://${extensionId}/sidepanel.html`, { timeout: 25000 });
+      console.log('[Browser] Sidepanel page loaded. Waiting for input box...');
+      
+      const spInput = sidepanelPage.locator('textarea#sp-msg').first();
+      await spInput.waitFor({ state: 'visible', timeout: 15000 });
+      
+      await spInput.click({ timeout: 5000 });
+      await sidepanelPage.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+      await sidepanelPage.keyboard.press('Backspace');
+      await spInput.fill(text);
+      await sidepanelPage.waitForTimeout(300);
+      
+      const spSendBtn = sidepanelPage.locator('button#sp-send').first();
+      await spSendBtn.click({ timeout: 5000 });
+      console.log('[Browser] Prompt sent from sidepanel page tab.');
+      
+      await sidepanelPage.waitForTimeout(3000);
+      await sidepanelPage.close();
+      
+      await page.bringToFront();
+      console.log('[Browser] ✅ Prompt successfully submitted via extension sidepanel tab.');
+      return;
+    } catch (sidepanelErr) {
+      console.error('[Browser] Sidepanel tab interaction failed, falling back to floating UI:', sidepanelErr.message);
+      try {
+        await sidepanelPage.close();
+      } catch (_) {}
+    }
+  }
+
+  console.log('[Browser] Falling back to webpage floating UI...');
   const extInput = page.locator('textarea#ql-msg').first();
   try {
-    await extInput.waitFor({ state: 'visible', timeout: 25000 });
+    await extInput.waitFor({ state: 'visible', timeout: 15000 });
   } catch (e) {
     const currentUrl = page.url();
     const pageTitle = await page.title();
-    console.error(`[Browser] Failed to find extension textarea. URL: ${currentUrl}, Title: ${pageTitle}`);
+    console.error(`[Browser] Failed to find extension textarea on webpage. URL: ${currentUrl}, Title: ${pageTitle}`);
     try {
       const scrPath = await takeBrowserScreenshot(session);
       console.log(`[Browser] Error screenshot saved to: ${scrPath}`);
@@ -282,14 +327,12 @@ export async function submitPrompt(session, promptText) {
     throw new Error(`Extension input box (textarea#ql-msg) not found. URL: ${currentUrl}. Title: ${pageTitle}. Make sure the extension is active.`);
   }
 
-  // Focus and fill extension input box
   await extInput.click({ timeout: 10000 });
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
   await page.keyboard.press('Backspace');
   await extInput.fill(text);
   await page.waitForTimeout(200);
 
-  // Click the extension's send button
   const extSendBtn = page.locator('button#ql-send').first();
   try {
     await extSendBtn.waitFor({ state: 'visible', timeout: 10000 });
@@ -298,7 +341,7 @@ export async function submitPrompt(session, promptText) {
     throw new Error('Extension send button (button#ql-send) not clickable: ' + err.message);
   }
 
-  console.log('[Browser] ✅ Prompt submitted via Extension UI.');
+  console.log('[Browser] ✅ Prompt submitted via webpage floating UI.');
   await page.waitForTimeout(1500);
 }
 
