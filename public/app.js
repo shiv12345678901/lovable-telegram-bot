@@ -17,6 +17,7 @@ const btnSnapshot = document.getElementById('btn-snapshot');
 const btnReloadDashboard = document.getElementById('btn-reload-dashboard');
 const btnStopBrowser = document.getElementById('btn-stop-browser');
 const btnStartInstance = document.getElementById('btn-start-instance');
+const btnExtSnapshot = document.getElementById('btn-ext-snapshot');
 
 let activeProjectIndex = null;
 let currentProjectList = [];
@@ -272,6 +273,10 @@ btnCancel.onclick = () => {
 
 btnSnapshot.onclick = () => {
   socket.emit('capture-snapshot');
+};
+
+btnExtSnapshot.onclick = () => {
+  socket.emit('capture-ext-snapshot');
 };
 
 btnReloadDashboard.onclick = () => {

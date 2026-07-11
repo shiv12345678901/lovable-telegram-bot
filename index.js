@@ -247,6 +247,27 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('capture-ext-snapshot', async () => {
+    try {
+      if (!session.context) throw new Error('No active browser context running. Please start the browser first.');
+      console.log('[WebSocket] Opening temporary page for extensions check...');
+      const tempPage = await session.context.newPage();
+      await tempPage.goto('chrome://extensions/', { waitUntil: 'load', timeout: 20000 });
+      await tempPage.waitForTimeout(3000);
+      const snapshotPath = path.join(process.cwd(), 'public', `ext-debug-${Date.now()}.png`);
+      await tempPage.screenshot({ path: snapshotPath, fullPage: true });
+      await tempPage.close();
+      
+      const imageBuffer = await fs.promises.readFile(snapshotPath);
+      const base64Image = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+      socket.emit('snapshot-capture', { img: base64Image });
+      await fs.promises.unlink(snapshotPath).catch(() => {});
+    } catch (err) {
+      console.error('[WebSocket] Extension inspection failed:', err.message);
+      socket.emit('operation-failed', { error: err.message });
+    }
+  });
+
   socket.on('start-session', async () => {
     try {
       console.log('[WebSocket] Starting browser instance from web UI...');
