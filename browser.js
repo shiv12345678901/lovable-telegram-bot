@@ -149,7 +149,7 @@ export async function initBrowser(session) {
             ql_channel_redirected: true,
             ql_license_valid: true,
             ql_license_key: "INTERNAL",
-            ql_sidebar_mode: true
+            ql_sidebar_mode: false
           }, resolve);
         });
       });
