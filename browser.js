@@ -279,6 +279,8 @@ export async function submitPrompt(session, promptText) {
   if (extensionId) {
     console.log(`[Browser] Opening extension sidepanel page in a new tab...`);
     const sidepanelPage = await session.context.newPage();
+    sidepanelPage.on('console', msg => console.log(`[Sidepanel Console] ${msg.type()}: ${msg.text()}`));
+    sidepanelPage.on('pageerror', err => console.error(`[Sidepanel PageError] ${err.message}`));
     try {
       await sidepanelPage.goto(`chrome-extension://${extensionId}/sidepanel.html`, { timeout: 25000 });
       console.log('[Browser] Sidepanel page loaded. Waiting for input box...');
