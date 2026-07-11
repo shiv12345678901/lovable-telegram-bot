@@ -18,8 +18,16 @@ RUN npm install --production --no-audit --no-fund
 
 # Copy application files
 COPY --chown=pwuser:pwuser public/ ./public/
+COPY --chown=pwuser:pwuser extension/ ./extension/
 COPY --chown=pwuser:pwuser *.js ./
 COPY --chown=pwuser:pwuser .env.example ./
+
+# Install xvfb under root to run headed Chrome with extensions in Docker
+USER root
+RUN apt-get update && apt-get install -y xvfb && rm -rf /var/lib/apt/lists/*
+
+# Switch back to the pre-created non-root user
+USER pwuser
 
 # Playwright config
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
@@ -27,8 +35,6 @@ ENV QT_X11_NO_MITSHM=1
 ENV _X11_NO_MITSHM=1
 ENV MITSHM=0
 
-# Switch to the pre-created non-root user
-USER pwuser
 EXPOSE 7860
 
-CMD ["node", "index.js"]
+CMD ["xvfb-run", "--server-args=-screen 0 1440x900x24", "node", "index.js"]

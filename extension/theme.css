@@ -1,0 +1,162 @@
+:root {
+  color-scheme: dark;
+  --ql-bg: #06060c;
+  --ql-bg-elevated: rgba(13, 13, 23, 0.85);
+  --ql-bg-surface: rgba(22, 22, 40, 0.45);
+  --ql-bg-hover: rgba(139, 92, 246, 0.08);
+  --ql-border: rgba(255, 255, 255, 0.07);
+  --ql-border-hover: rgba(139, 92, 246, 0.45);
+  --ql-text-primary: #f8fafc;
+  --ql-text-secondary: #cbd5e1;
+  --ql-text-muted: #94a3b8;
+  --ql-accent: #8b5cf6;
+  --ql-accent-hover: #a78bfa;
+  --ql-accent-glow: rgba(139, 92, 246, 0.25);
+  --ql-accent-subtle: rgba(139, 92, 246, 0.12);
+  --ql-link: #c084fc;
+  --ql-gradient-primary: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);
+  --ql-gradient-shimmer: linear-gradient(90deg, #7c3aed, #ec4899, #3b82f6, #7c3aed);
+  --ql-success: #10b981;
+  --ql-success-bg: rgba(16, 185, 129, 0.1);
+  --ql-warning: #f59e0b;
+  --ql-warning-bg: rgba(245, 158, 11, 0.1);
+  --ql-danger: #ef4444;
+  --ql-danger-bg: rgba(239, 68, 68, 0.1);
+  --ql-radius: 16px;
+  --ql-radius-sm: 12px;
+  --ql-radius-xs: 8px;
+  --ql-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --ql-shadow-hover: 0 20px 60px rgba(139, 92, 246, 0.15), 0 12px 30px rgba(0, 0, 0, 0.7);
+  --ql-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --ql-glass: rgba(8, 8, 16, 0.75);
+  --ql-overlay: rgba(0, 0, 0, 0.75);
+  --ql-modal-bg: #0c0c14;
+  --ql-modal-surface: #161626;
+  --ql-chat-bubble-end: #7c3aed;
+  --ql-font: 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+body.sp-light, #ql-floating.ql-light {
+  color-scheme: light;
+  --ql-bg: #f4f7fb;
+  --ql-bg-elevated: #ffffff;
+  --ql-bg-surface: #eef2f8;
+  --ql-bg-hover: #e2e8f0;
+  --ql-border: rgba(0, 0, 0, 0.08);
+  --ql-border-hover: rgba(99, 102, 241, 0.2);
+  --ql-text-primary: #0f172a;
+  --ql-text-secondary: #475569;
+  --ql-text-muted: #64748b;
+  --ql-accent: #6366f1;
+  --ql-accent-hover: #4f46e5;
+  --ql-accent-glow: rgba(99, 102, 241, 0.2);
+  --ql-accent-subtle: rgba(99, 102, 241, 0.08);
+  --ql-link: #4f46e5;
+  --ql-gradient-primary: linear-gradient(135deg, #6366f1 0%, #3b82f6 100%);
+  --ql-gradient-shimmer: linear-gradient(90deg, #6366f1, #3b82f6, #6366f1);
+  --ql-shadow: 0 12px 30px rgba(0, 0, 0, 0.04);
+  --ql-shadow-hover: 0 20px 40px rgba(0, 0, 0, 0.08);
+  --ql-glass: rgba(255, 255, 255, 0.85);
+  --ql-overlay: rgba(0, 0, 0, 0.35);
+  --ql-modal-bg: #ffffff;
+  --ql-modal-surface: #e8f0fe;
+  --ql-chat-bubble-end: #6366f1;
+}
+
+body {
+  background: var(--ql-bg);
+}
+
+.sp-btn-feature {
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 6px;
+  border-radius: var(--ql-radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--ql-transition);
+  font-family: inherit;
+  border: 1px solid var(--ql-border);
+  background: var(--ql-bg-surface);
+  color: var(--ql-text-secondary);
+}
+
+.sp-btn-feature:hover {
+  border-color: var(--ql-border-hover);
+  color: var(--ql-text-primary);
+  background: var(--ql-bg-hover);
+}
+.sp-btn-feature:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.sp-btn-native-chat { color: var(--ql-accent); border-color: var(--ql-accent-subtle); }
+.sp-btn-native-chat:hover { background: var(--ql-accent-subtle); }
+.sp-btn-native-chat.sp-native-active { color: var(--ql-success); border-color: var(--ql-success-bg); }
+.sp-btn-download { color: var(--ql-accent); }
+.sp-btn-download:hover { background: var(--ql-accent-subtle); }
+.sp-btn-quick-init { color: var(--ql-accent); }
+.sp-btn-quick-init:hover { background: var(--ql-accent-subtle); }
+.sp-btn-publish { color: var(--ql-accent); }
+.sp-btn-publish:hover { background: var(--ql-accent-subtle); }
+.sp-btn-cloud { color: #38bdf8; }
+.sp-btn-cloud:hover { background: rgba(56, 189, 248, 0.08); }
+
+.sp-section-label {
+  margin-top: 14px;
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ql-text-muted);
+}
+
+.pk-discord-cta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--ql-border);
+  background: var(--ql-bg-surface);
+  color: var(--ql-text-secondary);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all var(--ql-transition);
+}
+.pk-discord-cta:hover { border-color: var(--ql-border-hover); color: var(--ql-text-primary); }
+
+.pk-publish-overlay {
+  position: fixed; inset: 0;
+  background: var(--ql-overlay);
+  z-index: 99999;
+  display: flex;
+  align-items: center; justify-content: center;
+  backdrop-filter: blur(8px);
+}
+.pk-publish-overlay-top { z-index: 2147483647; }
+.pk-publish-modal {
+  background: var(--ql-modal-bg);
+  border: 1px solid var(--ql-border);
+  border-radius: 14px;
+  padding: 24px;
+  max-width: 360px;
+  width: 90%;
+  box-shadow: var(--ql-shadow);
+}
+.pk-publish-modal h3 { margin: 0 0 8px; color: var(--ql-text-primary); font-size: 16px; font-weight: 700; text-align: center; }
+.pk-publish-modal p { margin: 0 0 16px; color: var(--ql-text-secondary); font-size: 13px; text-align: center; }
+.pk-publish-url-box { background: var(--ql-modal-surface); border: 1px solid var(--ql-border); border-radius: 10px; padding: 10px; margin-bottom: 16px; word-break: break-all; }
+.pk-publish-url-box a { color: var(--ql-link); text-decoration: none; font-size: 13px; }
+.pk-publish-actions { display: flex; gap: 8px; }
+.pk-publish-actions button { flex: 1; padding: 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit; }
+.pk-publish-copy { border: 1px solid var(--ql-border); background: transparent; color: var(--ql-text-primary); }
+.pk-publish-open { border: none; background: var(--ql-gradient-primary); color: #fff; font-weight: 600; }
+.pk-publish-close { width: 100%; margin-top: 8px; padding: 8px; border: none; background: transparent; color: var(--ql-text-muted); cursor: pointer; font-size: 12px; font-family: inherit; }
+
+.pk-update-banner { padding: 12px 14px; background: var(--ql-bg-surface); border: 1px solid var(--ql-border); border-radius: 10px; margin: 8px 0; }
+.pk-update-banner-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.pk-update-banner-title { font-size: 12px; color: var(--ql-accent); font-weight: 600; }
+.pk-update-banner-text { font-size: 11px; color: var(--ql-text-secondary); margin: 0 0 8px; white-space: pre-line; }
+.pk-update-banner-dl { display: inline-block; padding: 5px 14px; background: var(--ql-gradient-primary); color: #fff; border-radius: 6px; text-decoration: none; font-size: 11px; font-weight: 600; }

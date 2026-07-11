@@ -16,28 +16,22 @@ export async function initBrowser(session) {
     }
   }
 
-  console.log('[Browser] Launching headless Chromium...');
-  session.browser = await chromium.launch({
-    headless: true,
+  const extensionPath = path.join(process.cwd(), 'extension');
+  const userDataDir = path.join(os.tmpdir(), `playwright-profile-${Date.now()}`);
+
+  console.log(`[Browser] Launching Chromium with Extension loaded from: ${extensionPath}`);
+  
+  session.context = await chromium.launchPersistentContext(userDataDir, {
+    headless: false, // Required for Chrome Extensions
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--disable-web-security'
-    ]
-  });
-
-  // #10: Browser crash recovery — auto-clean session on disconnect
-  session.browser.on('disconnected', () => {
-    console.error('[Browser] ⚠️ Chromium process disconnected unexpectedly!');
-    session.browser = null;
-    session.context = null;
-    session.page = null;
-    session.isProcessing = false;
-  });
-
-  session.context = await session.browser.newContext({
+      '--disable-web-security',
+      `--disable-extensions-except=${extensionPath}`,
+      `--load-extension=${extensionPath}`
+    ],
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
     viewport: { width: 1440, height: 900 },
     locale: 'en-US',
@@ -57,12 +51,23 @@ export async function initBrowser(session) {
     }
   });
 
+  // Set browser reference to context object for matching close API signature
+  session.browser = session.context;
+
+  // #10: Browser crash recovery — auto-clean session on disconnect
+  session.context.on('close', () => {
+    console.error('[Browser] ⚠️ Chromium browser context closed!');
+    session.browser = null;
+    session.context = null;
+    session.page = null;
+    session.isProcessing = false;
+  });
+
   // Inject anti-detection script to hide webdriver flag
   await session.context.addInitScript(() => {
     Object.defineProperty(navigator, 'webdriver', {
       get: () => undefined
     });
-    // Overwrite Chrome window properties
     window.chrome = {
       runtime: {}
     };
@@ -100,7 +105,9 @@ export async function initBrowser(session) {
     }
   ]);
 
-  session.page = await session.context.newPage();
+  // Persistent contexts automatically open a default page on start, reuse it
+  const pages = session.context.pages();
+  session.page = pages.length > 0 ? pages[0] : await session.context.newPage();
   console.log('[Browser] Ready.');
 }
 
@@ -221,98 +228,26 @@ export async function submitPrompt(session, promptText) {
   const { page } = session;
   if (!page) throw new Error('No active page. Select a project first.');
 
-  const inputSelector = 'div[contenteditable="true"], textarea';
-  try {
-    await page.waitForSelector(inputSelector, { visible: true, timeout: 20000 });
-  } catch {
-    throw new Error('Could not locate the prompt input box.');
+  console.log('[Browser] Submitting prompt via Chrome Extension message interface...');
+
+  const result = await page.mainFrame().evaluate(async (text) => {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({
+        action: "sendPromptToLovable",
+        message: text
+      }, (response) => {
+        resolve(response || { ok: false, error: "No response from extension background script" });
+      });
+    });
+  }, promptText);
+
+  console.log('[Browser] Extension submission response:', result);
+  if (!result || result.ok !== true) {
+    throw new Error(result?.error || 'Failed to submit prompt through the Chrome Extension.');
   }
 
-  const promptInput = page.locator(inputSelector).first();
-
-  // Anti-bot: mouse movement
-  try {
-    const box = await promptInput.boundingBox();
-    if (box) {
-      const tx = box.x + Math.random() * box.width;
-      const ty = box.y + Math.random() * box.height;
-      await page.mouse.move(tx - 80 + Math.random() * 40, ty - 80 + Math.random() * 40);
-      await page.waitForTimeout(80);
-      await page.mouse.move(tx, ty, { steps: 5 });
-      await page.waitForTimeout(80);
-    }
-  } catch {}
-
-  await promptInput.focus();
-  await page.waitForTimeout(200);
-  await page.keyboard.press('Control+A');
-  await page.waitForTimeout(80);
-  await page.keyboard.press('Backspace');
-  await page.waitForTimeout(200);
-
-  // #5: Chunk typing — type in word-sized chunks with random pauses between chunks
-  // ~5x faster than char-by-char while still appearing human-like
-  const words = promptText.split(/(\s+)/); // Split preserving whitespace
-  for (const word of words) {
-    if (word.length === 0) continue;
-    // Type entire word/chunk at once with slight per-key delay
-    await page.keyboard.type(word, { delay: 8 });
-    // Random pause between chunks (30-120ms)
-    await page.waitForTimeout(30 + Math.floor(Math.random() * 90));
-  }
-
-  await page.waitForTimeout(800);
-
-  // Click submit button using Playwright's native click
-  let submitted = false;
-
-  try {
-    const submitBtn = page.locator('button[type="submit"]').first();
-    if (await submitBtn.isVisible({ timeout: 2000 })) {
-      await submitBtn.click();
-      submitted = true;
-      console.log('[Browser] Clicked button[type="submit"]');
-    }
-  } catch {}
-
-  if (!submitted) {
-    try {
-      const sendButtons = page.locator('button:has(svg)');
-      const count = await sendButtons.count();
-      if (count > 0) {
-        const lastBtn = sendButtons.nth(count - 1);
-        if (await lastBtn.isVisible({ timeout: 1000 })) {
-          await lastBtn.click();
-          submitted = true;
-          console.log('[Browser] Clicked last SVG button');
-        }
-      }
-    } catch {}
-  }
-
-  if (!submitted) {
-    console.log('[Browser] No submit button found. Trying Ctrl+Enter...');
-    await page.keyboard.press('Control+Enter');
-  }
-
-  // Post-submit verification
+  console.log('[Browser] ✅ Prompt accepted and queued via Extension.');
   await page.waitForTimeout(2000);
-  const editorCleared = await page.evaluate(() => {
-    const editor = document.querySelector('div[contenteditable="true"], textarea');
-    if (!editor) return true;
-    const text = (editor.innerText || editor.value || '').trim();
-    return text.length === 0 || text.length < 5;
-  });
-
-  if (editorCleared) {
-    console.log('[Browser] ✅ Prompt accepted — editor cleared.');
-  } else {
-    console.log('[Browser] ⚠️ Editor still has text. Trying Ctrl+Enter fallback...');
-    await page.keyboard.press('Control+Enter');
-    await page.waitForTimeout(1000);
-  }
-
-  console.log('[Browser] Prompt submission complete.');
 }
 
 /**
