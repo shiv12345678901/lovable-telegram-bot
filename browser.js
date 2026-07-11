@@ -269,8 +269,17 @@ export async function submitPrompt(session, promptText) {
   const extInput = page.locator('textarea#ql-msg').first();
   try {
     await extInput.waitFor({ state: 'visible', timeout: 25000 });
-  } catch {
-    throw new Error('Extension input box (textarea#ql-msg) not found. Make sure the extension is active.');
+  } catch (e) {
+    const currentUrl = page.url();
+    const pageTitle = await page.title();
+    console.error(`[Browser] Failed to find extension textarea. URL: ${currentUrl}, Title: ${pageTitle}`);
+    try {
+      const scrPath = await takeBrowserScreenshot(session);
+      console.log(`[Browser] Error screenshot saved to: ${scrPath}`);
+    } catch (scrErr) {
+      console.error('[Browser] Failed to take error screenshot:', scrErr.message);
+    }
+    throw new Error(`Extension input box (textarea#ql-msg) not found. URL: ${currentUrl}. Title: ${pageTitle}. Make sure the extension is active.`);
   }
 
   // Focus and fill extension input box
