@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import os from 'os';
 import path from 'path';
+import fs from 'fs';
 
 /**
  * Launches a headless Chromium instance and injects the session cookie.
@@ -26,6 +27,13 @@ export async function initBrowser(session) {
 
   console.log(`[Browser] Launching Chromium with Extension loaded from: ${extensionPath}`);
   console.log(`[Browser] DISPLAY=${process.env.DISPLAY}`);
+  
+  try {
+    const extFiles = fs.readdirSync(extensionPath);
+    console.log(`[Browser Diagnostic] Extension directory files: ${extFiles.join(', ')}`);
+  } catch (readdirErr) {
+    console.error(`[Browser Diagnostic] Failed to read extension directory: ${readdirErr.message}`);
+  }
   
   session.context = await chromium.launchPersistentContext(userDataDir, {
     headless: false, // Required for Chrome Extensions
@@ -117,6 +125,16 @@ export async function initBrowser(session) {
   const pages = session.context.pages();
   session.page = pages.length > 0 ? pages[0] : await session.context.newPage();
   console.log('[Browser] Ready.');
+
+  // Check active service workers shortly after boot
+  setTimeout(async () => {
+    try {
+      const sws = session.context.serviceWorkers();
+      console.log(`[Browser Diagnostic] Active service workers: ${sws.map(s => s.url()).join(', ')}`);
+    } catch (swErr) {
+      console.error('[Browser Diagnostic] Error listing service workers:', swErr.message);
+    }
+  }, 3000);
 
   // Pre-seed extension storage to bypass gates and enable custom UI immediately
   try {

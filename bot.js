@@ -398,12 +398,12 @@ export function setupBot(token, allowedUsers = []) {
   bot.command('cancel', handleCancel);
   bot.command('help', handleHelp);
 
-  // Keyboard button patterns — exact match only
-  bot.hears(/^Projects$/i, sendHomeMenu);
-  bot.hears(/^Screenshot$/i, handleViewScreen);
-  bot.hears(/^Status$/i, handleStatus);
-  bot.hears(/^Cancel$/i, handleCancel);
-  bot.hears(/^Stop$/i, closeActiveSession);
+  // Keyboard button patterns (substring matches to support emojis)
+  bot.hears(/projects/i, sendHomeMenu);
+  bot.hears(/screenshot/i, handleViewScreen);
+  bot.hears(/status/i, handleStatus);
+  bot.hears(/cancel/i, handleCancel);
+  bot.hears(/stop/i, closeActiveSession);
 
   // ─── Callback Query Handlers ──────────────────────────────────
 
@@ -546,7 +546,7 @@ export function setupBot(token, allowedUsers = []) {
     console.log(`[Bot] Received text update from user ${ctx.from?.id}: "${promptText}"`);
 
     // Strict guard: ignore any keyboard buttons or standard slash commands completely
-    const isMenuButtonOrCommand = /^(Projects|Screenshot|Status|Cancel|Stop|\/start|\/home|\/screenshot|\/status|\/cancel|\/stop|\/help)$/i.test(promptText);
+    const isMenuButtonOrCommand = /(projects|screenshot|status|cancel|stop|help)/i.test(promptText) || promptText.startsWith('/');
     if (isMenuButtonOrCommand) {
       console.log(`[Bot] Blocked menu text "${promptText}" from falling through as a prompt.`);
       return;
