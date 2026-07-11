@@ -16,10 +16,16 @@ export async function initBrowser(session) {
     }
   }
 
+  // Ensure virtual display for headed Chromium (HF start.sh sets DISPLAY=:99)
+  if (!process.env.DISPLAY) {
+    process.env.DISPLAY = ':99';
+  }
+
   const extensionPath = path.join(process.cwd(), 'extension');
   const userDataDir = path.join(os.tmpdir(), `playwright-profile-${Date.now()}`);
 
   console.log(`[Browser] Launching Chromium with Extension loaded from: ${extensionPath}`);
+  console.log(`[Browser] DISPLAY=${process.env.DISPLAY}`);
   
   session.context = await chromium.launchPersistentContext(userDataDir, {
     headless: false, // Required for Chrome Extensions
@@ -28,6 +34,7 @@ export async function initBrowser(session) {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
+      '--disable-software-rasterizer',
       '--disable-web-security',
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`

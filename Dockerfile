@@ -1,44 +1,47 @@
-# Playwright Docker base image — aligned to version v1.45.1 to match package locks and keep build light and reliable
+# Standalone build: Space repo root = this folder (lovable-telegram-bot).
+# Matches HF log pattern: COPY package*.json, public/, extension/, *.js
 FROM mcr.microsoft.com/playwright:v1.45.1-jammy
 
 WORKDIR /app
 
-# The base image already has a non-root 'pwuser' pre-created.
-# We set permissions of our app directory to 'pwuser'
-RUN chown -R pwuser:pwuser /app
+USER root
 
-# Copy package configuration
-COPY --chown=pwuser:pwuser package*.json ./
+COPY package.json package-lock.json* ./
 
-# Force exact version in package.json to match base image so no mismatch occurs on installation
-RUN node -e "const p = require('./package.json'); p.dependencies.playwright = '1.45.1'; require('fs').writeFileSync('./package.json', JSON.stringify(p, null, 2))"
+RUN node -e "const fs=require('fs');const p=require('./package.json');p.dependencies=p.dependencies||{};p.dependencies.playwright='1.45.1';fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
 
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-RUN npm install --production --no-audit --no-fund
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV NODE_ENV=production
 
-# Copy application files
-COPY --chown=pwuser:pwuser public/ ./public/
-COPY --chown=pwuser:pwuser extension/ ./extension/
-COPY --chown=pwuser:pwuser *.js ./
-COPY --chown=pwuser:pwuser .env.example ./
+RUN npm install --omit=dev --no-audit --no-fund
 
-# Install xvfb under root to run headed Chrome with extensions in Docker
-USER root
-RUN apt-get update && apt-get install -y xvfb && rm -rf /var/lib/apt/lists/*
+COPY public/ ./public/
+COPY extension/ ./extension/
+COPY *.js ./
+COPY start.sh ./
+COPY .env.example ./
 
-# Fix X11 and /tmp permissions so non-root users (like pwuser) can run Xvfb
-RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp && chmod 1777 /tmp/.X11-unix
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends xvfb \
+  && rm -rf /var/lib/apt/lists/* \
+  && mkdir -p /tmp/.X11-unix \
+  && chmod 1777 /tmp /tmp/.X11-unix \
+  && chmod +x /app/start.sh \
+  && chown -R pwuser:pwuser /app
 
-# Switch back to the pre-created non-root user
 USER pwuser
 
-# Playwright config
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV QT_X11_NO_MITSHM=1
 ENV _X11_NO_MITSHM=1
 ENV MITSHM=0
+ENV DISPLAY=:99
+ENV PORT=7860
+# Force Node to flush logs so HF Runtime logs are not empty
+ENV NODE_OPTIONS=--trace-uncaught
 
 EXPOSE 7860
 
-# -a option automatically allocates a free X display number, avoiding port locks
-CMD ["xvfb-run", "-a", "--server-args=-screen 0 1440x900x24", "node", "index.js"]
+# Critical: start.sh runs Xvfb in background then exec node (binds 0.0.0.0:7860).
+# Never use `xvfb-run ... node` as CMD — HF health check timed out 30m with empty logs.
+CMD ["bash", "/app/start.sh"]

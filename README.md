@@ -12,46 +12,78 @@ pinned: false
 
 Remote Telegram dashboard and prompt controller for [Lovable.dev](https://lovable.dev).
 
-## Setup
+## Hugging Face Spaces (recommended)
 
-### 1. Create the Space
+### 1. Create Space
 
-- Go to [huggingface.co/new-space](https://huggingface.co/new-space)
-- Choose **Docker** as the SDK
-- Set visibility to **Private** (recommended)
+- [huggingface.co/new-space](https://huggingface.co/new-space)
+- **SDK: Docker**
+- Visibility: **Private** (you inject Lovable session cookies)
 
-### 2. Add Secrets
+### 2. Push the correct root
 
-In your Space's **Settings → Secrets**, add these variables:
+HF looks for **`Dockerfile` + `README.md` at the Space repo root**.
 
-| Secret Name | Required | Description |
-|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | ✅ | Get from [@BotFather](https://t.me/BotFather) |
-| `LOVABLE_SESSION_COOKIE` | ✅ | Your `lovable-session-id-v2` cookie value |
-| `ALLOWED_USER_IDS` | Recommended | Your Telegram user ID (comma-separated for multiple) |
-| `WEBHOOK_URL` | Optional | Your Space URL (e.g. `https://username-spacename.hf.space`) for webhook mode |
-
-### 3. Push Code
+**Option A — monorepo (this workspace)**  
+Push the **parent** repo that already has root `Dockerfile` + root `README.md` (they copy from `lovable-telegram-bot/`).
 
 ```bash
-git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
+# from monorepo root
+git remote add hf https://huggingface.co/spaces/YOUR_USER/YOUR_SPACE
 git push hf main
 ```
 
-### 4. Verify
+**Option B — bot folder only**  
+Space root = contents of `lovable-telegram-bot/` (this README + this Dockerfile).
 
-- Check the Space's **Logs** tab for startup diagnostics
-- Send `/start` to your bot in Telegram
-- The health endpoint is available at `https://your-space.hf.space/health`
+```bash
+cd lovable-telegram-bot
+git init
+git remote add hf https://huggingface.co/spaces/YOUR_USER/YOUR_SPACE
+git add .
+git commit -m "Deploy bot"
+git push hf main --force
+```
+
+### 3. Secrets (Settings → Secrets)
+
+| Secret | Required | Description |
+|--------|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | ✅ | From [@BotFather](https://t.me/BotFather) |
+| `LOVABLE_SESSION_COOKIE` | ✅ | Browser cookie `lovable-session-id-v2` on lovable.dev |
+| `ALLOWED_USER_IDS` | Recommended | Your Telegram user id (from @userinfobot) |
+| `WEBHOOK_URL` | Optional | `https://YOUR_USER-YOUR_SPACE.hf.space` |
+
+After saving secrets: **Settings → Factory reboot**.
+
+### 4. Hardware
+
+This bot runs **headed Chromium + Xvfb + extension**. Free/CPU Basic often fails or stuck on “Starting”. Use **CPU Basic+** or higher if needed.
+
+### 5. Verify
+
+| Check | Expected |
+|-------|----------|
+| Logs | `Listening on 0.0.0.0:7860` |
+| `/health` | JSON `status: healthy` |
+| Telegram | `/start` on your bot |
+
+If token is missing, Space still serves `/` status page and `/health` (degraded) so you can debug.
 
 ## Features
 
-- 🏠 Browse and select Lovable projects
-- 🚀 Submit prompts and observe live build progress
-- 📸 Capture browser screenshots
-- ❓ Answer Lovable's interactive questions
-- 📝 Full response extraction with formatting
-- 📥 Prompt queue (auto-submits when current build finishes)
-- ❌ Cancel running builds
-- 🔄 Auto keep-alive pinger (prevents HF sleep)
-- 🧹 Idle session cleanup (30-min timeout)
+- Browse and select Lovable projects  
+- Submit prompts + live build progress  
+- Screenshots, interactive questions, prompt queue  
+- Cancel builds, idle session cleanup  
+- Optional webhook + keep-alive  
+
+## Local run
+
+```bash
+cp .env.example .env   # fill secrets
+npm install
+npm start
+```
+
+Open http://localhost:7860
