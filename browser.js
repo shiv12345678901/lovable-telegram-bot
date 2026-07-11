@@ -350,27 +350,46 @@ export async function submitPrompt(session, promptText) {
     }
   }
 
-  let extInput = await waitForFloatingInput(15000);
+  let extInput = await waitForFloatingInput(8000);
 
   if (!extInput) {
-    // The content script may not have injected yet. Reload the page and try again.
-    console.log('[Browser] Floating textarea not found, reloading page and retrying...');
-    await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(3000);
-    extInput = await waitForFloatingInput(20000);
-  }
-
-  if (!extInput) {
-    const currentUrl = page.url();
-    const pageTitle = await page.title();
-    console.error(`[Browser] Failed to find extension textarea on webpage. URL: ${currentUrl}, Title: ${pageTitle}`);
+    console.log("[Browser] Floating extension textarea not found. Falling back to Lovable's native UI...");
     try {
-      const scrPath = await takeBrowserScreenshot(session);
-      console.log(`[Browser] Error screenshot saved to: ${scrPath}`);
-    } catch (scrErr) {
-      console.error('[Browser] Failed to take error screenshot:', scrErr.message);
+      const nativeInput = page.locator('div[contenteditable="true"], textarea[placeholder*="message"], textarea[placeholder*="ask"], textarea').first();
+      await nativeInput.waitFor({ state: 'visible', timeout: 10000 });
+      await nativeInput.click({ timeout: 5000 });
+      
+      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+      await page.keyboard.press('Backspace');
+      
+      const isDiv = await nativeInput.evaluate(el => el.tagName === 'DIV');
+      if (isDiv) {
+        await nativeInput.focus();
+        await page.keyboard.insertText(text);
+      } else {
+        await nativeInput.fill(text);
+      }
+      
+      await page.waitForTimeout(500);
+      
+      const sendBtn = page.locator('button[type="submit"], button:has-text("Send"), form button').first();
+      try {
+        await sendBtn.waitFor({ state: 'visible', timeout: 5000 });
+        await sendBtn.click({ timeout: 5000 });
+        console.log('[Browser] ✅ Prompt submitted via native send button.');
+      } catch (btnErr) {
+        console.log('[Browser] Native send button not found or not clickable. Pressing Control+Enter...');
+        await page.keyboard.press('Control+Enter');
+        console.log('[Browser] ✅ Prompt submitted via Control+Enter.');
+      }
+      
+      await page.waitForTimeout(1500);
+      return;
+    } catch (fallbackErr) {
+      const pageTitle = await page.title();
+      const currentUrl = page.url();
+      throw new Error(`Failed to submit prompt: Both extension input and native input fallback failed. URL: ${currentUrl}. Title: ${pageTitle}. Error: ${fallbackErr.message}`);
     }
-    throw new Error(`Extension input box (textarea#ql-msg) not found. URL: ${currentUrl}. Title: ${pageTitle}. Make sure the extension is active and you are on a lovable.dev project page.`);
   }
 
   await extInput.click({ timeout: 10000 });
