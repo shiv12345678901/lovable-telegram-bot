@@ -55,15 +55,7 @@ export async function initBrowser(session) {
     geolocation: { longitude: -74.006, latitude: 40.7128 },
     permissions: ['geolocation'],
     extraHTTPHeaders: {
-      'Accept-Language': 'en-US,en;q=0.9',
-      'sec-ch-ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
-      'sec-ch-ua-mobile': '?0',
-      'sec-ch-ua-platform': '"Windows"',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'none',
-      'Sec-Fetch-User': '?1',
-      'Upgrade-Insecure-Requests': '1'
+      'Accept-Language': 'en-US,en;q=0.9'
     }
   });
 
