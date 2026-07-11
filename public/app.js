@@ -2,12 +2,15 @@ const socket = io();
 
 // DOM Cache
 const projectsContainer = document.getElementById('projects-container');
+const chatStreamContainer = document.getElementById('chat-stream-container');
 const terminalOutput = document.getElementById('terminal-output');
-const progressIndicator = document.getElementById('progress-indicator');
+const filesContainer = document.getElementById('files-container');
+const screenshotHolder = document.getElementById('screenshot-holder');
+const iframeHolder = document.getElementById('iframe-holder');
+const activeProjectName = document.getElementById('active-project-name');
+const statusBadge = document.getElementById('status-badge');
 const promptInput = document.getElementById('prompt-input');
 const charCounter = document.getElementById('char-counter');
-const screenshotContainer = document.getElementById('screenshot-container');
-const filesContainer = document.getElementById('files-container');
 const btnSubmit = document.getElementById('btn-submit');
 const btnCancel = document.getElementById('btn-cancel');
 const btnSnapshot = document.getElementById('btn-snapshot');
@@ -16,12 +19,28 @@ const btnStopBrowser = document.getElementById('btn-stop-browser');
 
 let activeProjectIndex = null;
 let currentProjectList = [];
+let activeObserverBubble = null;
 
-// Socket Connection Handler
+// Tab Switcher
+window.switchTab = function(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.toLowerCase().includes(tabName));
+  });
+  document.querySelectorAll('.tab-content').forEach(content => {
+    content.classList.toggle('active', content.id === `tab-${tabName}`);
+  });
+};
+
+// Insert Preset Prompts
+window.insertPrompt = function(text) {
+  promptInput.value = text;
+  charCounter.textContent = `${text.length} characters`;
+  promptInput.focus();
+};
+
+// Socket Connect logic
 socket.on('connect', () => {
-  console.log('Connected to server websocket.');
-  appendTerminalLine('System connected to web UI controller.', 'system-msg');
-  // Load dashboard on startup
+  console.log('[WebSocket] Connected.');
   socket.emit('get-projects');
 });
 
@@ -31,7 +50,7 @@ socket.on('projects-list', (projects) => {
   projectsContainer.innerHTML = '';
   
   if (projects.length === 0) {
-    projectsContainer.innerHTML = '<div class="loading-state">No workspaces active. Reload to connect.</div>';
+    projectsContainer.innerHTML = '<div class="loading-spinner">No active workspaces. Click sync.</div>';
     return;
   }
 
@@ -39,7 +58,6 @@ socket.on('projects-list', (projects) => {
     const card = document.createElement('div');
     card.className = `project-card ${activeProjectIndex === idx ? 'active' : ''}`;
     card.onclick = () => selectProject(idx);
-    
     card.innerHTML = `
       <h3>${escapeHtml(proj.name)}</h3>
       <span>${escapeHtml(proj.url.split('/').pop())}</span>
@@ -48,118 +66,170 @@ socket.on('projects-list', (projects) => {
   });
 });
 
-// Select active workspace project
+// Activate selected project
 function selectProject(index) {
   activeProjectIndex = index;
   const project = currentProjectList[index];
   
-  // Update visual state
   document.querySelectorAll('.project-card').forEach((el, idx) => {
     el.classList.toggle('active', idx === index);
   });
 
-  appendTerminalLine(`Activating project workspace: ${project.name}...`, 'system-msg');
+  activeProjectName.textContent = project.name;
+  statusBadge.className = 'status-indicator active';
+  statusBadge.innerHTML = '<span class="dot"></span> Connected';
+  btnSubmit.disabled = false;
+
+  addChatBubble(`🔄 Activating project workspace: ${project.name}...`, 'system');
   socket.emit('select-project', { index, url: project.url });
 }
 
-// System selection complete callback
+// Project Selection Callback
 socket.on('project-activated', (data) => {
-  appendTerminalLine(`✅ Project activated: ${data.name}. Ready for prompts!`, 'system-msg');
+  addChatBubble(`✅ Workspace "${data.name}" loaded successfully. Ready to build!`, 'system');
+  // Load initial placeholder preview or screenshot
+  socket.emit('capture-snapshot');
 });
 
-// Live Build Logs Stream Handler
+// Real-time observer logs builder stream
 socket.on('build-update', (data) => {
-  if (data.status) {
-    appendTerminalLine(`🔧 ${data.status}`);
+  // If we don't have an active build/observer bubble, create one
+  if (!activeObserverBubble) {
+    activeObserverBubble = document.createElement('div');
+    activeObserverBubble.className = 'observer-bubble';
+    activeObserverBubble.innerHTML = `
+      <div class="title">🔨 Lovable is building changes...</div>
+      <div class="progress-bar"><div class="progress-bar-fill"></div></div>
+      <div class="observer-status-text">Starting build steps...</div>
+    `;
+    chatStreamContainer.appendChild(activeObserverBubble);
+    chatStreamContainer.scrollTop = chatStreamContainer.scrollHeight;
   }
-  if (data.progress) {
-    progressIndicator.textContent = data.progress;
+
+  // Update observer details
+  const statusEl = activeObserverBubble.querySelector('.observer-status-text');
+  if (statusEl && data.status) {
+    statusEl.innerHTML = `<b>Status:</b> ${escapeHtml(data.status)}`;
   }
-  
-  // Update changed files
+
+  // Update Changed Files tab
   if (data.files && data.files.length > 0) {
     filesContainer.innerHTML = '';
     data.files.forEach(file => {
-      const row = document.createElement('div');
-      row.className = 'file-row';
+      const card = document.createElement('div');
+      card.className = 'file-card';
       const icon = file.op === 'create' ? '🆕' : (file.op === 'delete' ? '🗑️' : '✏️');
-      row.innerHTML = `
-        <div class="file-info">
+      card.innerHTML = `
+        <div class="file-meta">
           <span>${icon}</span>
           <span>${escapeHtml(file.path)}</span>
         </div>
-        <span class="file-op ${file.op}">${file.op}</span>
+        <span class="op-badge ${file.op}">${file.op}</span>
       `;
-      filesContainer.appendChild(row);
+      filesContainer.appendChild(card);
     });
   }
 
-  // Update terminal logs
+  // Stream terminal logs
   if (data.terminalLogs) {
     terminalOutput.innerHTML = '';
-    const lines = data.terminalLogs.split('\n');
-    lines.forEach(line => {
-      appendTerminalLine(line);
+    data.terminalLogs.split('\n').forEach(line => {
+      const l = document.createElement('div');
+      l.className = 'term-line';
+      l.textContent = line;
+      terminalOutput.appendChild(l);
     });
+    terminalOutput.scrollTop = terminalOutput.scrollHeight;
   }
 });
 
-// Action callback when build finishes
-socket.on('build-finished', (data) => {
-  appendTerminalLine(`🎉 Build succeeded! Live Preview URL available at:`, 'system-msg');
-  
-  const linkLine = document.createElement('div');
-  linkLine.className = 'terminal-line';
-  linkLine.innerHTML = `<a href="${data.url}" target="_blank" style="color: var(--accent-purple); font-weight: bold;">🌐 Open Live App Preview</a>`;
-  terminalOutput.appendChild(linkLine);
-  terminalOutput.scrollTop = terminalOutput.scrollHeight;
-  
-  setLoading(false);
-});
-
-// Interactive questions handler
+// Question from Lovable Action Callback
 socket.on('build-question', (data) => {
-  appendTerminalLine(`❓ Action Required: ${data.question}`, 'system-msg');
-  // Populate options directly in terminal as click targets
+  // Remove loading bar from active bubble
+  if (activeObserverBubble) {
+    const bar = activeObserverBubble.querySelector('.progress-bar');
+    if (bar) bar.remove();
+  }
+
+  const qBubble = document.createElement('div');
+  qBubble.className = 'observer-bubble';
+  qBubble.innerHTML = `
+    <div class="title" style="color: var(--accent-red)">❓ Lovable requires confirmation</div>
+    <p style="margin-bottom: 10px;">${escapeHtml(data.question)}</p>
+    <div class="question-options-holder"></div>
+  `;
+
+  const holder = qBubble.querySelector('.question-options-holder');
   data.options.forEach(opt => {
     const btn = document.createElement('button');
     btn.className = 'btn btn-secondary btn-small';
-    btn.style.margin = '4px';
+    btn.style.margin = '4px 4px 0 0';
     btn.textContent = opt.text;
     btn.onclick = () => {
-      appendTerminalLine(`Submitting choice: ${opt.text}...`, 'system-msg');
+      addChatBubble(`Selected: ${opt.text}`, 'user');
       socket.emit('submit-question-choice', { text: opt.text });
-      btn.disabled = true;
+      qBubble.remove();
+      activeObserverBubble = null; // reset build state
     };
-    terminalOutput.appendChild(btn);
+    holder.appendChild(btn);
   });
-  terminalOutput.scrollTop = terminalOutput.scrollHeight;
+
+  chatStreamContainer.appendChild(qBubble);
+  chatStreamContainer.scrollTop = chatStreamContainer.scrollHeight;
 });
 
-// Capture snapshot viewport update
-socket.on('snapshot-capture', (data) => {
-  screenshotContainer.innerHTML = `<img src="${data.img}" alt="Viewport screen preview">`;
-});
+// Build Completion Panel Callback
+socket.on('build-finished', (data) => {
+  // Remove loading indicator bubble
+  if (activeObserverBubble) {
+    activeObserverBubble.remove();
+    activeObserverBubble = null;
+  }
 
-// Error notifications
-socket.on('operation-failed', (data) => {
-  appendTerminalLine(`❌ Failure: ${data.error}`, 'error-msg');
+  addChatBubble('🎉 Build completed successfully! Preview compiled.', 'system');
+
+  // Embed Live URL directly inside the Iframe view (Just like Lovable!)
+  if (data.url) {
+    iframeHolder.innerHTML = `<iframe src="${data.url}"></iframe>`;
+    // Force active tab focus on the Live App iframe
+    switchTab('app');
+  }
+
   setLoading(false);
 });
 
-// UI Actions Interaction Handling
+// Capture snapshot
+socket.on('snapshot-capture', (data) => {
+  screenshotHolder.innerHTML = `<img src="${data.img}" alt="Screenshot viewport">`;
+});
+
+// Error handling
+socket.on('operation-failed', (data) => {
+  if (activeObserverBubble) {
+    activeObserverBubble.remove();
+    activeObserverBubble = null;
+  }
+  addChatBubble(`❌ Build failed: ${data.error}`, 'system');
+  setLoading(false);
+});
+
+// UI Actions Click Handlers
 btnSubmit.onclick = () => {
   const prompt = promptInput.value.trim();
   if (!prompt) return;
 
   setLoading(true);
-  appendTerminalLine(`🚀 Deploying prompt to active workspace...`, 'system-msg');
+  addChatBubble(prompt, 'user');
+  promptInput.value = '';
+  charCounter.textContent = '0 characters';
+  
   socket.emit('submit-prompt', { prompt });
 };
 
 btnCancel.onclick = () => {
   socket.emit('cancel-build');
-  appendTerminalLine('❌ Cancel command submitted.', 'system-msg');
+  addChatBubble('❌ Cancel command sent.', 'system');
+  setLoading(false);
 };
 
 btnSnapshot.onclick = () => {
@@ -167,20 +237,20 @@ btnSnapshot.onclick = () => {
 };
 
 btnReloadDashboard.onclick = () => {
-  appendTerminalLine('🔄 Rescraping Lovable projects dashboard...', 'system-msg');
+  addChatBubble('🔄 Synchronizing workspaces list...', 'system');
   socket.emit('get-projects');
 };
 
 btnStopBrowser.onclick = () => {
   socket.emit('stop-session');
-  appendTerminalLine('🛑 Chromium termination signal sent. Browser context closed.', 'system-msg');
+  addChatBubble('🛑 Terminating Chromium backend connection...', 'system');
+  setLoading(false);
 };
 
-// Input character limit helper
+// Input event listener
 promptInput.oninput = () => {
-  charCounter.textContent = `${promptInput.value.length} chars`;
+  charCounter.textContent = `${promptInput.value.length} characters`;
 };
-
 promptInput.onkeydown = (e) => {
   if (e.key === 'Enter' && e.ctrlKey) {
     e.preventDefault();
@@ -188,25 +258,18 @@ promptInput.onkeydown = (e) => {
   }
 };
 
-function insertPrompt(text) {
-  promptInput.value = text;
-  charCounter.textContent = `${text.length} chars`;
-  promptInput.focus();
-}
-
-function appendTerminalLine(text, className = '') {
-  const line = document.createElement('div');
-  line.className = `terminal-line ${className}`;
-  line.textContent = text;
-  terminalOutput.appendChild(line);
-  terminalOutput.scrollTop = terminalOutput.scrollHeight;
+// Chat rendering helper
+function addChatBubble(text, sender) {
+  const bubble = document.createElement('div');
+  bubble.className = `${sender}-bubble`;
+  bubble.textContent = text;
+  chatStreamContainer.appendChild(bubble);
+  chatStreamContainer.scrollTop = chatStreamContainer.scrollHeight;
 }
 
 function setLoading(isLoading) {
   btnSubmit.disabled = isLoading;
   btnCancel.disabled = !isLoading;
-  progressIndicator.textContent = isLoading ? 'Processing' : 'Idle';
-  progressIndicator.className = `build-step ${isLoading ? 'active' : ''}`;
 }
 
 function escapeHtml(unsafe) {

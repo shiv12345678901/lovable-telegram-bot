@@ -17,6 +17,7 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN npm install --production --no-audit --no-fund
 
 # Copy application files
+COPY --chown=pwuser:pwuser public/ ./public/
 COPY --chown=pwuser:pwuser *.js ./
 COPY --chown=pwuser:pwuser .env.example ./
 

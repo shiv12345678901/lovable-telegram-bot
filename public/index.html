@@ -3,107 +3,129 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lovable Remote Control Center</title>
+  <title>Lovable.dev Remote Control</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script src="/socket.io/socket.io.js"></script>
 </head>
-<body class="dark-theme">
-  <!-- Glowing Background Orbs -->
-  <div class="glow-orb orb-1"></div>
-  <div class="glow-orb orb-2"></div>
-
-  <div class="app-container">
-    <!-- Header -->
-    <header class="app-header">
-      <div class="logo-area">
-        <span class="logo-icon">🔮</span>
-        <div class="logo-text">
-          <h1>Lovable.dev</h1>
-          <span class="status-badge" id="bot-status"><span class="pulse-dot"></span> Remote UI</span>
-        </div>
+<body class="lovable-dark">
+  <div class="app-layout">
+    
+    <!-- Left Sidebar: Projects List -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="logo-spark">✨</span>
+        <span class="logo-title">Lovable Remote</span>
       </div>
-      <div class="header-actions">
-        <button id="btn-reload-dashboard" class="btn btn-secondary">🔄 Refresh Projects</button>
-        <button id="btn-stop-browser" class="btn btn-danger">🛑 Kill Session</button>
+      <div class="section-title">Workspaces</div>
+      <div class="projects-list" id="projects-container">
+        <div class="loading-spinner">Loading projects...</div>
       </div>
-    </header>
+      <div class="sidebar-footer">
+        <button id="btn-reload-dashboard" class="action-btn" title="Refresh project list">🔄 Sync List</button>
+        <button id="btn-stop-browser" class="action-btn danger-hover" title="Kill browser context">🛑 Terminate</button>
+      </div>
+    </aside>
 
-    <div class="main-layout">
-      <!-- Sidebar: Projects list -->
-      <aside class="sidebar card">
-        <div class="card-header">
-          <h2>Active Workspaces</h2>
-        </div>
-        <div class="projects-list" id="projects-container">
-          <div class="loading-state">Loading workspaces...</div>
-        </div>
-      </aside>
-
-      <!-- Center Panel: Terminal & Prompt Input -->
-      <main class="content-panel">
-        <!-- Live Terminal Stream -->
-        <section class="terminal-card card">
-          <div class="card-header terminal-header">
-            <div class="window-dots">
-              <span class="dot red"></span>
-              <span class="dot yellow"></span>
-              <span class="dot green"></span>
-            </div>
-            <div class="terminal-title">Realtime Compiler Activity</div>
-            <div class="build-step" id="progress-indicator">Idle</div>
+    <!-- Main Workspace Area -->
+    <main class="workspace-area">
+      
+      <!-- Center: Prompt & Chat log (just like Lovable's chat window) -->
+      <section class="chat-section">
+        <div class="workspace-header">
+          <div class="active-project-info">
+            <h2 id="active-project-name">Select a Project</h2>
+            <span class="status-indicator idle" id="status-badge"><span class="dot"></span> Offline</span>
           </div>
-          <div class="terminal-body" id="terminal-output">
-            <div class="terminal-line system-msg">> Systems initialized. Ready to receive prompts.</div>
+          <div class="actions">
+            <button id="btn-cancel" class="btn btn-secondary btn-small" disabled>Cancel</button>
           </div>
-        </section>
+        </div>
 
-        <!-- Prompt Composer -->
-        <section class="composer-card card">
+        <!-- Chat Stream showing prompts and compiler progress -->
+        <div class="chat-stream" id="chat-stream-container">
+          <div class="system-bubble">
+            <p>Welcome to Lovable Remote. Select a project workspace from the left panel to begin prompting.</p>
+          </div>
+        </div>
+
+        <!-- Composer Box (Just like Lovable's input text area) -->
+        <div class="composer-section">
           <div class="prompt-suggestions">
-            <span class="suggest-pill" onclick="insertPrompt('Fix the alignment of this UI layout')">🎨 Fix alignment</span>
-            <span class="suggest-pill" onclick="insertPrompt('Add a dark mode toggle to the dashboard')">🌙 Dark mode</span>
-            <span class="suggest-pill" onclick="insertPrompt('Optimize image loading and add lazy load')">⚡ Optimize page</span>
+            <button onclick="insertPrompt('Fix the centering alignment of this container')">🎨 Center container</button>
+            <button onclick="insertPrompt('Add a dark mode toggle to the top navigation')">🌙 Dark mode</button>
+            <button onclick="insertPrompt('Add a search bar to filter items in the list')">🔍 Add search</button>
           </div>
-          <div class="composer-input-wrapper">
-            <textarea id="prompt-input" placeholder="Ask Lovable to edit, improve, or build something... (Ctrl+Enter to send)"></textarea>
+          <div class="composer-container">
+            <textarea id="prompt-input" placeholder="How do you want to update your app? (Ctrl+Enter to build)"></textarea>
             <div class="composer-footer">
-              <span class="char-counter" id="char-counter">0 chars</span>
-              <div class="composer-buttons">
-                <button id="btn-cancel" class="btn btn-secondary" disabled>Cancel</button>
-                <button id="btn-submit" class="btn btn-primary">Deploy Prompt 🚀</button>
+              <span class="char-count" id="char-counter">0 characters</span>
+              <button id="btn-submit" class="btn btn-primary" disabled>
+                <span>Generate Changes</span> <span class="btn-spark">⚡</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Live App Preview & Logs Tab Panel -->
+      <section class="preview-section">
+        <!-- Tabs Header -->
+        <div class="tab-header">
+          <button class="tab-btn active" onclick="switchTab('app')">🌐 Live App</button>
+          <button class="tab-btn" onclick="switchTab('terminal')">📋 Terminal Logs</button>
+          <button class="tab-btn" onclick="switchTab('files')">📂 Changed Files</button>
+          <button class="tab-btn" onclick="switchTab('screenshot')">📸 Screenshot</button>
+        </div>
+
+        <!-- Tab contents -->
+        <div class="tab-content-container">
+          <!-- 1. Live Preview iframe -->
+          <div class="tab-content active" id="tab-app">
+            <div class="iframe-container" id="iframe-holder">
+              <div class="placeholder-state">
+                <span class="placeholder-icon">🌐</span>
+                <p>No preview compiled. Submit a prompt to generate the live application.</p>
               </div>
             </div>
           </div>
-        </section>
-      </main>
 
-      <!-- Right Panel: Live Snapshot Preview & File list -->
-      <aside class="preview-panel">
-        <section class="screenshot-card card">
-          <div class="card-header">
-            <h2>Live Viewport</h2>
-            <button id="btn-snapshot" class="btn btn-small">📸 Snapshot</button>
+          <!-- 2. Terminal Logs Console -->
+          <div class="tab-content" id="tab-terminal">
+            <div class="terminal-box" id="terminal-output">
+              <div class="term-line system">> Logs stream initialized.</div>
+            </div>
           </div>
-          <div class="screenshot-body" id="screenshot-container">
-            <div class="no-preview">No active project viewport loaded</div>
-          </div>
-        </section>
 
-        <section class="files-card card">
-          <div class="card-header">
-            <h2>File Operations</h2>
+          <!-- 3. Changed Files list -->
+          <div class="tab-content" id="tab-files">
+            <div class="files-list" id="files-container">
+              <div class="placeholder-state">
+                <span class="placeholder-icon">📂</span>
+                <p>No file modifications recorded in the current build.</p>
+              </div>
+            </div>
           </div>
-          <div class="files-body" id="files-container">
-            <div class="no-files">No current file changes tracked</div>
+
+          <!-- 4. Playwright Screenshot -->
+          <div class="tab-content" id="tab-screenshot">
+            <div class="screenshot-box" id="screenshot-holder">
+              <div class="placeholder-state">
+                <span class="placeholder-icon">📸</span>
+                <p>Click "Snapshot" below to inspect the backend browser view.</p>
+              </div>
+            </div>
+            <div class="tab-action-bar">
+              <button id="btn-snapshot" class="btn btn-secondary btn-small">Take Live Snapshot</button>
+            </div>
           </div>
-        </section>
-      </aside>
-    </div>
+        </div>
+      </section>
+
+    </main>
   </div>
-
   <script src="app.js"></script>
 </body>
 </html>
