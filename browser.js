@@ -185,72 +185,81 @@ async function closeLeakedTabs(session) {
  * Navigates to the dashboard and scrapes project list.
  */
 export async function scrapeProjects(session) {
-  if (!session.page) await initBrowser(session);
-  await closeLeakedTabs(session);
-
-  console.log('[Browser] Navigating to dashboard...');
-  await session.page.goto('https://lovable.dev/dashboard', { waitUntil: 'load', timeout: 45000 });
-
-  const currentUrl = session.page.url();
-  console.log(`[Browser] URL: ${currentUrl}`);
-
-  if (currentUrl.includes('/sign-in') || currentUrl.includes('/login')) {
-    throw new Error('Session cookie expired. Please update LOVABLE_SESSION_COOKIE.');
+  if (session.isNavigating) {
+    console.log('[Browser] Navigation/Scrape already in progress. Rejecting concurrent call.');
+    return session.projects || [];
   }
-
-  // #6: Smart wait — wait for actual project links to render, fallback to 3s
+  session.isNavigating = true;
   try {
-    await session.page.waitForSelector('a[href*="/projects/"]', { timeout: 8000 });
-  } catch {
-    await session.page.waitForTimeout(3000);
-  }
+    if (!session.page) await initBrowser(session);
+    await closeLeakedTabs(session);
 
-  const rawProjects = await session.page.evaluate(() => {
-    return Array.from(document.querySelectorAll('a'))
-      .map(a => ({
-        name: (a.innerText || '').replace(/\s+/g, ' ').trim(),
-        href: (a.getAttribute('href') || '').trim()
-      }))
-      .filter(item => item.href.includes('/projects/') || item.href.includes('/workspace/'));
-  });
+    console.log('[Browser] Navigating to dashboard...');
+    await session.page.goto('https://lovable.dev/dashboard', { waitUntil: 'load', timeout: 45000 });
 
-  console.log(`[Browser] Scraped ${rawProjects.length} raw links.`);
+    const currentUrl = session.page.url();
+    console.log(`[Browser] URL: ${currentUrl}`);
 
-  const uniqueProjects = [];
-  const seenUrls = new Set();
-
-  for (const item of rawProjects) {
-    let url = item.href;
-    if (!url.startsWith('http')) {
-      url = 'https://lovable.dev' + (url.startsWith('/') ? '' : '/') + url;
+    if (currentUrl.includes('/sign-in') || currentUrl.includes('/login')) {
+      throw new Error('Session cookie expired. Please update LOVABLE_SESSION_COOKIE.');
     }
 
-    const skip = url.endsWith('/projects') || url.endsWith('/projects/') ||
-      url.endsWith('/new') || url.includes('/new-project') || url.includes('/create') ||
-      url.includes('/settings') || url.includes('/members') ||
-      item.name.length < 2 || /create project|new project/i.test(item.name);
-
-    if (!skip && !seenUrls.has(url)) {
-      seenUrls.add(url);
-      uniqueProjects.push({ name: item.name, url });
+    // #6: Smart wait — wait for actual project links to render, fallback to 3s
+    try {
+      await session.page.waitForSelector('a[href*="/projects/"]', { timeout: 8000 });
+    } catch {
+      await session.page.waitForTimeout(3000);
     }
-  }
 
-  if (uniqueProjects.length === 0) {
-    const diagnostics = await session.page.evaluate(() => {
-      return {
-        title: document.title,
-        bodyLen: (document.body?.innerText || '').length,
-        htmlSnippet: (document.body?.innerHTML || '').slice(0, 500),
-        anchorsCount: document.querySelectorAll('a').length
-      };
+    const rawProjects = await session.page.evaluate(() => {
+      return Array.from(document.querySelectorAll('a'))
+        .map(a => ({
+          name: (a.innerText || '').replace(/\s+/g, ' ').trim(),
+          href: (a.getAttribute('href') || '').trim()
+        }))
+        .filter(item => item.href.includes('/projects/') || item.href.includes('/workspace/'));
     });
-    console.warn('[Browser] ⚠️ 0 projects matched filters. Diagnostics:', diagnostics);
-  }
 
-  console.log(`[Browser] Scraped and filtered ${uniqueProjects.length} unique projects.`);
-  session.projects = uniqueProjects;
-  return uniqueProjects;
+    console.log(`[Browser] Scraped ${rawProjects.length} raw links.`);
+
+    const uniqueProjects = [];
+    const seenUrls = new Set();
+
+    for (const item of rawProjects) {
+      let url = item.href;
+      if (!url.startsWith('http')) {
+        url = 'https://lovable.dev' + (url.startsWith('/') ? '' : '/') + url;
+      }
+
+      const skip = url.endsWith('/projects') || url.endsWith('/projects/') ||
+        url.endsWith('/new') || url.includes('/new-project') || url.includes('/create') ||
+        url.includes('/settings') || url.includes('/members') ||
+        item.name.length < 2 || /create project|new project/i.test(item.name);
+
+      if (!skip && !seenUrls.has(url)) {
+        seenUrls.add(url);
+        uniqueProjects.push({ name: item.name, url });
+      }
+    }
+
+    if (uniqueProjects.length === 0) {
+      const diagnostics = await session.page.evaluate(() => {
+        return {
+          title: document.title,
+          bodyLen: (document.body?.innerText || '').length,
+          htmlSnippet: (document.body?.innerHTML || '').slice(0, 500),
+          anchorsCount: document.querySelectorAll('a').length
+        };
+      });
+      console.warn('[Browser] ⚠️ 0 projects matched filters. Diagnostics:', diagnostics);
+    }
+
+    console.log(`[Browser] Scraped and filtered ${uniqueProjects.length} unique projects.`);
+    session.projects = uniqueProjects;
+    return uniqueProjects;
+  } finally {
+    session.isNavigating = false;
+  }
 }
 
 /**
@@ -258,19 +267,28 @@ export async function scrapeProjects(session) {
  * Opens a specific project workspace.
  */
 export async function openProjectWorkspace(session, projectUrl) {
-  if (!session.page) await initBrowser(session);
-  await closeLeakedTabs(session);
-
-  console.log(`[Browser] Opening workspace: ${projectUrl}`);
-  await session.page.goto(projectUrl, { waitUntil: 'load', timeout: 60000 });
-
-  // #7: Wait for actual editor to appear instead of blind 5s wait
+  if (session.isNavigating) {
+    console.log('[Browser] Navigation/Workspace load already in progress. Rejecting concurrent call.');
+    return;
+  }
+  session.isNavigating = true;
   try {
-    await session.page.waitForSelector('div[contenteditable="true"], textarea', { timeout: 12000 });
-    console.log('[Browser] Editor element detected.');
-  } catch {
-    console.log('[Browser] Editor not found within 12s, continuing anyway...');
-    await session.page.waitForTimeout(2000);
+    if (!session.page) await initBrowser(session);
+    await closeLeakedTabs(session);
+
+    console.log(`[Browser] Opening workspace: ${projectUrl}`);
+    await session.page.goto(projectUrl, { waitUntil: 'load', timeout: 60000 });
+
+    // #7: Wait for actual editor to appear instead of blind 5s wait
+    try {
+      await session.page.waitForSelector('div[contenteditable="true"], textarea', { timeout: 12000 });
+      console.log('[Browser] Editor element detected.');
+    } catch {
+      console.log('[Browser] Editor not found within 12s, continuing anyway...');
+      await session.page.waitForTimeout(2000);
+    }
+  } finally {
+    session.isNavigating = false;
   }
 }
 
