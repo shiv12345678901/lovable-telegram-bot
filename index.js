@@ -1,6 +1,36 @@
 // Immediate stdout so HF Runtime logs are never blank while modules load
 console.log('[boot]', new Date().toISOString(), 'loading modules...');
 
+const originalLog = console.log;
+const originalError = console.error;
+global.serverLogs = [];
+
+console.log = (...args) => {
+  originalLog.apply(console, args);
+  const text = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+  global.serverLogs.push(`[Server Log] ${text}`);
+  if (global.serverLogs.length > 200) global.serverLogs.shift();
+  try {
+    const session = global.webSession;
+    if (session && session.io) {
+      session.io.emit('browser-log', { text: `[Server Log] ${text}` });
+    }
+  } catch (_) {}
+};
+
+console.error = (...args) => {
+  originalError.apply(console, args);
+  const text = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+  global.serverLogs.push(`[Server Error] ${text}`);
+  if (global.serverLogs.length > 200) global.serverLogs.shift();
+  try {
+    const session = global.webSession;
+    if (session && session.io) {
+      session.io.emit('browser-log', { text: `[Server Error] ${text}` });
+    }
+  } catch (_) {}
+};
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -107,8 +137,14 @@ io.on('connection', (socket) => {
   console.log(`[WebSocket] Client connected: ${socket.id}`);
   const session = sessionManager.getSession(DEFAULT_CHAT_ID);
   session.io = io;
+  global.webSession = session;
 
   // Stream any cached logs on connect
+  if (global.serverLogs) {
+    global.serverLogs.forEach(text => {
+      socket.emit('browser-log', { text });
+    });
+  }
   if (session.consoleLogs) {
     session.consoleLogs.forEach(text => {
       socket.emit('browser-log', { text });
