@@ -354,8 +354,19 @@ export async function submitPrompt(session, promptText) {
   if (!extInput) {
     console.log("[Browser] Floating extension textarea not found. Falling back to Lovable's native UI...");
     try {
-      const nativeInput = page.locator('div[contenteditable="true"], textarea[placeholder*="message"], textarea[placeholder*="ask"], textarea').first();
-      await nativeInput.waitFor({ state: 'visible', timeout: 10000 });
+      const nativeInput = await page.evaluateHandle(() => {
+        const editables = Array.from(document.querySelectorAll('div[contenteditable="true"], textarea'));
+        return editables.find(el => {
+          const rect = el.getBoundingClientRect();
+          if (rect.width < 100 || rect.height < 25) return false;
+          const placeholder = (el.getAttribute('placeholder') || el.getAttribute('data-placeholder') || '').toLowerCase();
+          return placeholder.includes('update') || placeholder.includes('ask') || placeholder.includes('message') || placeholder.includes('change') || (el.tagName === 'DIV' && el.getAttribute('contenteditable') === 'true');
+        }) || editables[0];
+      }).then(handle => handle.asElement());
+
+      if (!nativeInput) throw new Error('Could not find any editable chat input on the page.');
+
+      await nativeInput.scrollIntoViewIfNeeded();
       await nativeInput.click({ timeout: 5000 });
       
       await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
