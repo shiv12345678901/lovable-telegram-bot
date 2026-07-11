@@ -26,7 +26,7 @@ console.log("[ContentScript] Love Able AI loaded");
 
 const API_BASE = typeof POWERKITS_API_BASE !== "undefined" ? POWERKITS_API_BASE : GRINGOW_API_BASE;
 const API_KEY = typeof POWERKITS_API_KEY !== "undefined" ? POWERKITS_API_KEY : GRINGOW_API_KEY;
-const PROXY_COMMAND_URL = (typeof window !== "undefined" && window.PROXY_COMMAND_URL)
+var PROXY_COMMAND_URL = (typeof window !== "undefined" && window.PROXY_COMMAND_URL)
   || (API_BASE + "/functions/v1/proxy-command");
 
 const DISCORD_URL = (typeof DISCORD_SUPPORT_URL !== "undefined" && DISCORD_SUPPORT_URL)

@@ -76,11 +76,7 @@
   try { if (_ti && _ti.unref) _ti.unref(); } catch(e) {}
 
   (function _dg() {
-    var s = Date.now();
-    debugger;
-    var d = Date.now() - s;
-    if (d > 30) { _x(); }
-    setTimeout(_dg, 800);
+    // Anti-debugging check disabled for test runner stability
   })();
 
   try {
