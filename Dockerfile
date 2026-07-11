@@ -26,6 +26,9 @@ COPY --chown=pwuser:pwuser .env.example ./
 USER root
 RUN apt-get update && apt-get install -y xvfb && rm -rf /var/lib/apt/lists/*
 
+# Fix X11 and /tmp permissions so non-root users (like pwuser) can run Xvfb
+RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp && chmod 1777 /tmp/.X11-unix
+
 # Switch back to the pre-created non-root user
 USER pwuser
 
@@ -37,4 +40,5 @@ ENV MITSHM=0
 
 EXPOSE 7860
 
-CMD ["xvfb-run", "--server-args=-screen 0 1440x900x24", "node", "index.js"]
+# -a option automatically allocates a free X display number, avoiding port locks
+CMD ["xvfb-run", "-a", "--server-args=-screen 0 1440x900x24", "node", "index.js"]
