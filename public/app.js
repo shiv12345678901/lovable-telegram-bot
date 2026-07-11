@@ -238,6 +238,19 @@ socket.on('operation-failed', (data) => {
   setLoading(false);
 });
 
+socket.on('browser-log', (data) => {
+  const l = document.createElement('div');
+  l.className = 'term-line';
+  if (data.text.includes('PageError') || data.text.includes('error') || data.text.includes('Error')) {
+    l.style.color = 'var(--accent-red)';
+  } else {
+    l.style.color = '#94a3b8';
+  }
+  l.textContent = data.text;
+  terminalOutput.appendChild(l);
+  terminalOutput.scrollTop = terminalOutput.scrollHeight;
+});
+
 // UI Actions Click Handlers
 btnSubmit.onclick = () => {
   const prompt = promptInput.value.trim();

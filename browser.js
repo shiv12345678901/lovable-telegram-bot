@@ -124,6 +124,28 @@ export async function initBrowser(session) {
   // Persistent contexts automatically open a default page on start, reuse it
   const pages = session.context.pages();
   session.page = pages.length > 0 ? pages[0] : await session.context.newPage();
+  
+  session.consoleLogs = session.consoleLogs || [];
+  session.page.on('console', msg => {
+    const text = `[Browser Console] ${msg.type()}: ${msg.text()}`;
+    console.log(text);
+    session.consoleLogs.push(text);
+    if (session.consoleLogs.length > 200) session.consoleLogs.shift();
+    if (session.io) {
+      session.io.emit('browser-log', { text });
+    }
+  });
+
+  session.page.on('pageerror', err => {
+    const text = `[Browser PageError] ${err.message}`;
+    console.error(text);
+    session.consoleLogs.push(text);
+    if (session.consoleLogs.length > 200) session.consoleLogs.shift();
+    if (session.io) {
+      session.io.emit('browser-log', { text });
+    }
+  });
+
   console.log('[Browser] Ready.');
 
   // Check active service workers shortly after boot

@@ -106,6 +106,14 @@ const DEFAULT_CHAT_ID =
 io.on('connection', (socket) => {
   console.log(`[WebSocket] Client connected: ${socket.id}`);
   const session = sessionManager.getSession(DEFAULT_CHAT_ID);
+  session.io = io;
+
+  // Stream any cached logs on connect
+  if (session.consoleLogs) {
+    session.consoleLogs.forEach(text => {
+      socket.emit('browser-log', { text });
+    });
+  }
 
   socket.on('get-projects', async () => {
     try {
