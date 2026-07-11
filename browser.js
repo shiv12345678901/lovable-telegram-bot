@@ -42,20 +42,37 @@ export async function initBrowser(session) {
     viewport: { width: 1440, height: 900 }
   });
 
-  const cookieValue = process.env.LOVABLE_SESSION_COOKIE;
+  let cookieValue = process.env.LOVABLE_SESSION_COOKIE;
   if (!cookieValue || cookieValue === 'your_session_cookie_value_here') {
     throw new Error('LOVABLE_SESSION_COOKIE is not configured.');
   }
 
-  await session.context.addCookies([{
-    name: 'lovable-session-id-v2',
-    value: cookieValue,
-    domain: '.lovable.dev',
-    path: '/',
-    httpOnly: true,
-    secure: true,
-    sameSite: 'Lax'
-  }]);
+  // Clean the cookie value from any accidental whitespace/newlines from copy-pasting
+  cookieValue = cookieValue.trim().replace(/[\r\n]/g, '');
+
+  console.log(`[Browser] Injecting session cookie (length: ${cookieValue.length})`);
+
+  // Inject cookie to both domain targets to cover host and subdomains safely
+  await session.context.addCookies([
+    {
+      name: 'lovable-session-id-v2',
+      value: cookieValue,
+      domain: '.lovable.dev',
+      path: '/',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax'
+    },
+    {
+      name: 'lovable-session-id-v2',
+      value: cookieValue,
+      domain: 'lovable.dev',
+      path: '/',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax'
+    }
+  ]);
 
   session.page = await session.context.newPage();
   console.log('[Browser] Ready.');
