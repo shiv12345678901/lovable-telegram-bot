@@ -347,6 +347,24 @@ export async function submitPrompt(session, promptText) {
 
     if (!sidepanelSuccess) {
       console.warn('[Browser] All sidepanel attempts failed, falling back to floating UI. Last error:', lastSidepanelErr && lastSidepanelErr.message);
+
+      // CRITICAL: sidepanel.js sets ql_sidebar_mode=true on load, which causes content.js to
+      // destroy the floating UI box. Reset it to false so the floating UI can render.
+      try {
+        const sws = session.context.serviceWorkers();
+        const sw = sws[0];
+        if (sw) {
+          await sw.evaluate(async () => {
+            await new Promise(resolve => chrome.storage.local.set({ ql_sidebar_mode: false }, resolve));
+          });
+          console.log('[Browser] Reset ql_sidebar_mode=false to restore floating UI.');
+        }
+      } catch (resetErr) {
+        console.warn('[Browser] Could not reset ql_sidebar_mode:', resetErr.message);
+      }
+      // Give the content script time to receive the storage change and re-render the floating UI
+      await page.bringToFront();
+      await page.waitForTimeout(2000);
     }
   }
 
