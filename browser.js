@@ -295,46 +295,88 @@ export async function submitPrompt(session, promptText) {
   }
 
   if (extensionId) {
-    console.log(`[Browser] Opening extension sidepanel page in a new tab...`);
-    const sidepanelPage = await session.context.newPage();
-    sidepanelPage.on('console', msg => console.log(`[Sidepanel Console] ${msg.type()}: ${msg.text()}`));
-    sidepanelPage.on('pageerror', err => console.error(`[Sidepanel PageError] ${err.message}`));
-    try {
-      await sidepanelPage.goto(`chrome-extension://${extensionId}/sidepanel.html`, { timeout: 25000 });
-      console.log('[Browser] Sidepanel page loaded. Waiting for input box...');
-      
-      const spInput = sidepanelPage.locator('textarea#sp-msg').first();
-      await spInput.waitFor({ state: 'visible', timeout: 15000 });
-      
-      await spInput.click({ timeout: 5000 });
-      await sidepanelPage.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-      await sidepanelPage.keyboard.press('Backspace');
-      await spInput.fill(text);
-      await sidepanelPage.waitForTimeout(300);
-      
-      const spSendBtn = sidepanelPage.locator('button#sp-send').first();
-      await spSendBtn.click({ timeout: 5000 });
-      console.log('[Browser] Prompt sent from sidepanel page tab.');
-      
-      await sidepanelPage.waitForTimeout(3000);
-      await sidepanelPage.close();
-      
-      await page.bringToFront();
-      console.log('[Browser] ✅ Prompt successfully submitted via extension sidepanel tab.');
-      return;
-    } catch (sidepanelErr) {
-      console.error('[Browser] Sidepanel tab interaction failed, falling back to floating UI:', sidepanelErr.message);
+    // Retry the sidepanel approach up to 2 times before giving up.
+    const SIDEPANEL_RETRIES = 2;
+    let sidepanelSuccess = false;
+    let lastSidepanelErr = null;
+
+    for (let attempt = 1; attempt <= SIDEPANEL_RETRIES; attempt++) {
+      console.log(`[Browser] Opening extension sidepanel page (attempt ${attempt}/${SIDEPANEL_RETRIES})...`);
+      const sidepanelPage = await session.context.newPage();
+      sidepanelPage.on('console', msg => console.log(`[Sidepanel Console] ${msg.type()}: ${msg.text()}`));
+      sidepanelPage.on('pageerror', err => console.error(`[Sidepanel PageError] ${err.message}`));
       try {
+        await sidepanelPage.goto(`chrome-extension://${extensionId}/sidepanel.html`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        console.log('[Browser] Sidepanel DOM loaded. Waiting for scripts to initialize...');
+
+        // Give extension scripts (security-hardening, extension-config, sidepanel.js) time to run
+        // and for init() → showMainUI() → loadChatHistory → showMainUIContent() to complete.
+        await sidepanelPage.waitForTimeout(1500);
+
+        // showMainUI() is async (waits for loadChatHistory callback), so give it extra time.
+        const spInput = sidepanelPage.locator('textarea#sp-msg').first();
+        await spInput.waitFor({ state: 'visible', timeout: 25000 });
+
+        await spInput.click({ timeout: 5000 });
+        await sidepanelPage.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+        await sidepanelPage.keyboard.press('Backspace');
+        await spInput.fill(text);
+        await sidepanelPage.waitForTimeout(300);
+
+        const spSendBtn = sidepanelPage.locator('button#sp-send').first();
+        await spSendBtn.click({ timeout: 5000 });
+        console.log('[Browser] Prompt sent from sidepanel page tab.');
+
+        await sidepanelPage.waitForTimeout(3000);
         await sidepanelPage.close();
-      } catch (_) {}
+
+        await page.bringToFront();
+        console.log('[Browser] ✅ Prompt successfully submitted via extension sidepanel tab.');
+        sidepanelSuccess = true;
+        return;
+      } catch (sidepanelErr) {
+        lastSidepanelErr = sidepanelErr;
+        console.error(`[Browser] Sidepanel attempt ${attempt} failed:`, sidepanelErr.message);
+        try { await sidepanelPage.close(); } catch (_) {}
+        if (attempt < SIDEPANEL_RETRIES) {
+          console.log('[Browser] Waiting 3s before retry...');
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+    }
+
+    if (!sidepanelSuccess) {
+      console.warn('[Browser] All sidepanel attempts failed, falling back to floating UI. Last error:', lastSidepanelErr && lastSidepanelErr.message);
     }
   }
 
+  // Fallback: use the floating UI injected by the content script on the Lovable project page.
+  // The floating UI renders asynchronously (storage callbacks → showMainUI → DOM injection),
+  // so wait generously and reload the page once if the textarea is still missing.
   console.log('[Browser] Falling back to webpage floating UI...');
-  const extInput = page.locator('textarea#ql-msg').first();
-  try {
-    await extInput.waitFor({ state: 'visible', timeout: 15000 });
-  } catch (e) {
+  await page.bringToFront();
+
+  async function waitForFloatingInput(timeoutMs) {
+    const extInput = page.locator('textarea#ql-msg').first();
+    try {
+      await extInput.waitFor({ state: 'visible', timeout: timeoutMs });
+      return extInput;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  let extInput = await waitForFloatingInput(15000);
+
+  if (!extInput) {
+    // The content script may not have injected yet. Reload the page and try again.
+    console.log('[Browser] Floating textarea not found, reloading page and retrying...');
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3000);
+    extInput = await waitForFloatingInput(20000);
+  }
+
+  if (!extInput) {
     const currentUrl = page.url();
     const pageTitle = await page.title();
     console.error(`[Browser] Failed to find extension textarea on webpage. URL: ${currentUrl}, Title: ${pageTitle}`);
@@ -344,7 +386,7 @@ export async function submitPrompt(session, promptText) {
     } catch (scrErr) {
       console.error('[Browser] Failed to take error screenshot:', scrErr.message);
     }
-    throw new Error(`Extension input box (textarea#ql-msg) not found. URL: ${currentUrl}. Title: ${pageTitle}. Make sure the extension is active.`);
+    throw new Error(`Extension input box (textarea#ql-msg) not found. URL: ${currentUrl}. Title: ${pageTitle}. Make sure the extension is active and you are on a lovable.dev project page.`);
   }
 
   await extInput.click({ timeout: 10000 });
