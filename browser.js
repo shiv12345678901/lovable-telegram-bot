@@ -194,8 +194,8 @@ export async function scrapeProjects(session) {
     if (!session.page) await initBrowser(session);
     await closeLeakedTabs(session);
 
-    console.log('[Browser] Navigating to dashboard...');
-    await session.page.goto('https://lovable.dev/dashboard', { waitUntil: 'load', timeout: 45000 });
+    console.log('[Browser] Navigating to projects list...');
+    await session.page.goto('https://lovable.dev/dashboard/projects', { waitUntil: 'load', timeout: 45000 });
 
     const currentUrl = session.page.url();
     console.log(`[Browser] URL: ${currentUrl}`);
@@ -204,11 +204,11 @@ export async function scrapeProjects(session) {
       throw new Error('Session cookie expired. Please update LOVABLE_SESSION_COOKIE.');
     }
 
-    // #6: Smart wait — wait for actual project links to render, fallback to 3s
+    // #6: Smart wait — wait for actual project links to render, fallback to 4s
     try {
-      await session.page.waitForSelector('a[href*="/projects/"]', { timeout: 8000 });
+      await session.page.waitForSelector('a[href*="/projects/"]', { timeout: 12000 });
     } catch {
-      await session.page.waitForTimeout(3000);
+      await session.page.waitForTimeout(4000);
     }
 
     const rawProjects = await session.page.evaluate(() => {
