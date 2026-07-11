@@ -28,6 +28,7 @@ RUN apt-get update \
   && mkdir -p /tmp/.X11-unix \
   && chmod 1777 /tmp /tmp/.X11-unix \
   && chmod +x /app/start.sh \
+  && npx playwright install chrome \
   && chown -R pwuser:pwuser /app
 
 USER pwuser
