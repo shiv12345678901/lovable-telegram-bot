@@ -22,8 +22,16 @@ export async function initBrowser(session) {
     process.env.DISPLAY = ':99';
   }
 
-  const extensionPath = path.join(process.cwd(), 'extension');
+  const srcExtensionPath = path.join(process.cwd(), 'extension');
+  const extensionPath = path.join(os.tmpdir(), `playwright-ext-${Date.now()}`);
   const userDataDir = path.join(os.tmpdir(), `playwright-profile-${Date.now()}`);
+
+  try {
+    fs.cpSync(srcExtensionPath, extensionPath, { recursive: true });
+    console.log(`[Browser] Extension copied to temp path: ${extensionPath}`);
+  } catch (cpErr) {
+    console.error(`[Browser] Failed to copy extension to temp directory: ${cpErr.message}`);
+  }
 
   console.log(`[Browser] Launching Chromium with Extension loaded from: ${extensionPath}`);
   console.log(`[Browser] DISPLAY=${process.env.DISPLAY}`);
