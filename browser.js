@@ -149,7 +149,10 @@ export async function initBrowser(session) {
             ql_channel_redirected: true,
             ql_license_valid: true,
             ql_license_key: "INTERNAL",
-            ql_sidebar_mode: false
+            ql_sidebar_mode: false,
+            // Suppress the WhatsApp/YouTube community popup so it never
+            // blocks automation interactions in the sidepanel or floating UI.
+            ql_join_popup_seen_v3: true
           }, resolve);
         });
       });
@@ -272,7 +275,10 @@ export async function openProjectWorkspace(session, projectUrl) {
 }
 
 /**
- * Submit a prompt into Lovable's chat UI via the extension's sidepanel page directly or floating input box.
+ * Submit a prompt into Lovable's chat UI via the extension's floating input box.
+ * The sidepanel approach is skipped — security-hardening.js breaks el.closest()
+ * which causes the sidepanel page to crash before sp-msg renders.
+ * The floating UI injected by content.js on lovable.dev is reliable and fast.
  */
 export async function submitPrompt(session, promptText) {
   const { page } = session;
@@ -294,84 +300,11 @@ export async function submitPrompt(session, promptText) {
     console.warn('[Browser] Could not resolve extension ID from service worker:', err.message);
   }
 
-  if (extensionId) {
-    // Retry the sidepanel approach up to 2 times before giving up.
-    const SIDEPANEL_RETRIES = 2;
-    let sidepanelSuccess = false;
-    let lastSidepanelErr = null;
-
-    for (let attempt = 1; attempt <= SIDEPANEL_RETRIES; attempt++) {
-      console.log(`[Browser] Opening extension sidepanel page (attempt ${attempt}/${SIDEPANEL_RETRIES})...`);
-      const sidepanelPage = await session.context.newPage();
-      sidepanelPage.on('console', msg => console.log(`[Sidepanel Console] ${msg.type()}: ${msg.text()}`));
-      sidepanelPage.on('pageerror', err => console.error(`[Sidepanel PageError] ${err.message}`));
-      try {
-        await sidepanelPage.goto(`chrome-extension://${extensionId}/sidepanel.html`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        console.log('[Browser] Sidepanel DOM loaded. Waiting for scripts to initialize...');
-
-        // Give extension scripts (security-hardening, extension-config, sidepanel.js) time to run
-        // and for init() → showMainUI() → loadChatHistory → showMainUIContent() to complete.
-        await sidepanelPage.waitForTimeout(1500);
-
-        // showMainUI() is async (waits for loadChatHistory callback), so give it extra time.
-        const spInput = sidepanelPage.locator('textarea#sp-msg').first();
-        await spInput.waitFor({ state: 'visible', timeout: 25000 });
-
-        await spInput.click({ timeout: 5000 });
-        await sidepanelPage.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-        await sidepanelPage.keyboard.press('Backspace');
-        await spInput.fill(text);
-        await sidepanelPage.waitForTimeout(300);
-
-        const spSendBtn = sidepanelPage.locator('button#sp-send').first();
-        await spSendBtn.click({ timeout: 5000 });
-        console.log('[Browser] Prompt sent from sidepanel page tab.');
-
-        await sidepanelPage.waitForTimeout(3000);
-        await sidepanelPage.close();
-
-        await page.bringToFront();
-        console.log('[Browser] ✅ Prompt successfully submitted via extension sidepanel tab.');
-        sidepanelSuccess = true;
-        return;
-      } catch (sidepanelErr) {
-        lastSidepanelErr = sidepanelErr;
-        console.error(`[Browser] Sidepanel attempt ${attempt} failed:`, sidepanelErr.message);
-        try { await sidepanelPage.close(); } catch (_) {}
-        if (attempt < SIDEPANEL_RETRIES) {
-          console.log('[Browser] Waiting 3s before retry...');
-          await new Promise(r => setTimeout(r, 3000));
-        }
-      }
-    }
-
-    if (!sidepanelSuccess) {
-      console.warn('[Browser] All sidepanel attempts failed, falling back to floating UI. Last error:', lastSidepanelErr && lastSidepanelErr.message);
-
-      // CRITICAL: sidepanel.js sets ql_sidebar_mode=true on load, which causes content.js to
-      // destroy the floating UI box. Reset it to false so the floating UI can render.
-      try {
-        const sws = session.context.serviceWorkers();
-        const sw = sws[0];
-        if (sw) {
-          await sw.evaluate(async () => {
-            await new Promise(resolve => chrome.storage.local.set({ ql_sidebar_mode: false }, resolve));
-          });
-          console.log('[Browser] Reset ql_sidebar_mode=false to restore floating UI.');
-        }
-      } catch (resetErr) {
-        console.warn('[Browser] Could not reset ql_sidebar_mode:', resetErr.message);
-      }
-      // Give the content script time to receive the storage change and re-render the floating UI
-      await page.bringToFront();
-      await page.waitForTimeout(2000);
-    }
-  }
-
-  // Fallback: use the floating UI injected by the content script on the Lovable project page.
-  // The floating UI renders asynchronously (storage callbacks → showMainUI → DOM injection),
-  // so wait generously and reload the page once if the textarea is still missing.
-  console.log('[Browser] Falling back to webpage floating UI...');
+  // Use the floating UI injected by content.js on the Lovable project page.
+  // The sidepanel approach is intentionally skipped: security-hardening.js breaks
+  // el.closest() (Object is frozen), causing the sidepanel page to crash before
+  // sp-msg renders, wasting 50+ seconds on two doomed retries.
+  console.log('[Browser] Using floating UI on Lovable project page...');
   await page.bringToFront();
 
   async function waitForFloatingInput(timeoutMs) {
