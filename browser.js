@@ -229,11 +229,7 @@ export async function openProjectWorkspace(session, projectUrl) {
 }
 
 /**
- * Submit a prompt into Lovable's chat UI via native DOM (Playwright).
- *
- * NOTE: page.evaluate() runs in the PAGE world — chrome.runtime is NOT available there
- * (only in extension content scripts / service workers). Calling chrome.runtime.sendMessage
- * from evaluate always fails with "sendMessage is not a function".
+ * Submit a prompt into Lovable's chat UI via the extension's floating input box.
  */
 export async function submitPrompt(session, promptText) {
   const { page } = session;
@@ -242,70 +238,33 @@ export async function submitPrompt(session, promptText) {
   const text = String(promptText || '').trim();
   if (!text) throw new Error('Prompt text is empty.');
 
-  console.log('[Browser] Submitting prompt via native chat DOM...');
+  console.log('[Browser] Submitting prompt via Extension UI input box...');
 
-  // Prefer official chat form when present
-  const form = page.locator('form#chat-input').first();
-  const editor = form.locator('[contenteditable="true"]').first()
-    .or(page.locator('form#chat-input [contenteditable="true"]').first())
-    .or(page.locator('[contenteditable="true"]').first());
-
+  // Wait for the extension textarea to load
+  const extInput = page.locator('textarea#ql-msg').first();
   try {
-    await editor.waitFor({ state: 'visible', timeout: 20000 });
+    await extInput.waitFor({ state: 'visible', timeout: 25000 });
   } catch {
-    throw new Error('Lovable chat editor not found. Open a project and wait for the editor to load.');
+    throw new Error('Extension input box (textarea#ql-msg) not found. Make sure the extension is active.');
   }
 
-  await editor.click({ timeout: 10000 });
-  // Clear existing content then insert full prompt (works with React-controlled editors)
+  // Focus and fill extension input box
+  await extInput.click({ timeout: 10000 });
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
   await page.keyboard.press('Backspace');
-  // insertText is more reliable than type() for long prompts
-  await page.keyboard.insertText(text);
+  await extInput.fill(text);
+  await page.waitForTimeout(200);
 
-  // Give React a moment to enable the send button
-  await page.waitForTimeout(400);
-
-  const sendBtn = page.locator('#chatinput-send-message-button').first()
-    .or(page.locator('form#chat-input button[type="submit"]').first())
-    .or(page.locator('form#chat-input button[aria-label*="send" i]').first())
-    .or(page.locator('form#chat-input button').last());
-
-  // Force-enable if Lovable left it disabled after programmatic fill
-  await page.evaluate(() => {
-    const btn =
-      document.getElementById('chatinput-send-message-button') ||
-      document.querySelector('form#chat-input button[type="submit"]') ||
-      document.querySelector('form#chat-input button[aria-label*="send" i]');
-    if (btn) {
-      btn.removeAttribute('disabled');
-      btn.removeAttribute('aria-disabled');
-      if (btn instanceof HTMLButtonElement) btn.disabled = false;
-    }
-  });
-
+  // Click the extension's send button
+  const extSendBtn = page.locator('button#ql-send').first();
   try {
-    await sendBtn.click({ timeout: 10000 });
+    await extSendBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await extSendBtn.click({ timeout: 10000 });
   } catch (err) {
-    // Fallback: submit the form
-    const submitted = await page.evaluate(() => {
-      const f = document.querySelector('form#chat-input');
-      if (!f) return false;
-      if (typeof f.requestSubmit === 'function') {
-        f.requestSubmit();
-        return true;
-      }
-      f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      return true;
-    });
-    if (!submitted) {
-      throw new Error(
-        'Send button not clickable: ' + (err && err.message ? err.message : String(err))
-      );
-    }
+    throw new Error('Extension send button (button#ql-send) not clickable: ' + err.message);
   }
 
-  console.log('[Browser] ✅ Prompt submitted via native DOM.');
+  console.log('[Browser] ✅ Prompt submitted via Extension UI.');
   await page.waitForTimeout(1500);
 }
 
