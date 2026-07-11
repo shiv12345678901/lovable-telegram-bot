@@ -36,7 +36,6 @@ export async function initBrowser(session) {
   }
   
   session.context = await chromium.launchPersistentContext(userDataDir, {
-    channel: 'chrome',
     headless: false, // Required for Chrome Extensions
     args: [
       '--no-sandbox',
