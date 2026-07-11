@@ -539,10 +539,16 @@ export function setupBot(token, allowedUsers = []) {
   bot.on('text', async (ctx) => {
     const chatId = ctx.chat.id;
     const session = sessionManager.getSession(chatId);
-    const promptText = ctx.message.text || '';
+    
+    // Trim input to remove any leading/trailing spaces
+    const promptText = (ctx.message.text || '').trim();
 
-    // Guard: skip keyboard button text from being sent as prompts
-    if (/^(Projects|Screenshot|Status|Cancel|Stop)$/i.test(promptText)) {
+    console.log(`[Bot] Received text update from user ${ctx.from?.id}: "${promptText}"`);
+
+    // Strict guard: ignore any keyboard buttons or standard slash commands completely
+    const isMenuButtonOrCommand = /^(Projects|Screenshot|Status|Cancel|Stop|\/start|\/home|\/screenshot|\/status|\/cancel|\/stop|\/help)$/i.test(promptText);
+    if (isMenuButtonOrCommand) {
+      console.log(`[Bot] Blocked menu text "${promptText}" from falling through as a prompt.`);
       return;
     }
 
