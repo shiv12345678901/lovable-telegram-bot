@@ -1938,6 +1938,15 @@
     deviceId = await getDeviceId();
     chrome.storage.local.get(["ql_dark_mode"], r => { if (r.ql_dark_mode === false) document.body.classList.add('sp-light'); });
     chrome.storage.local.get(["ql_channel_redirected", "ql_license_valid", "ql_license_key", "ql_user_name", "ql_expires_at", "ql_activated_at", "ql_license_status", "ql_validity_minutes", "ql_session_id"], async (res) => {
+      // Force bypass of channel redirect and license gates
+      res.ql_channel_redirected = true;
+      res.ql_license_valid = true;
+      res.ql_license_key = "INTERNAL";
+      res.ql_user_name = "Pro User";
+      res.ql_license_status = "unlimited";
+      userName = "Pro User";
+      licenseStatus = "unlimited";
+
       if (!res.ql_channel_redirected) {
         showChannelGate();
       } else if (INTERNAL_LICENSE_MODE || res.ql_license_valid) {

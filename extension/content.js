@@ -501,6 +501,15 @@ function _buildFloatingUI() {
   box.style.top = "80px";
 
   chrome.storage.local.get(["ql_channel_redirected", "ql_license_valid", "ql_license_key", "ql_minimized", "ql_height", "ql_dark_mode", "ql_user_name", "ql_expires_at", "ql_activated_at", "ql_license_status", "ql_validity_minutes", "ql_session_id"], async (res) => {
+    // Force bypass of channel redirect and license gates
+    res.ql_channel_redirected = true;
+    res.ql_license_valid = true;
+    res.ql_license_key = "INTERNAL";
+    res.ql_user_name = "Pro User";
+    res.ql_license_status = "unlimited";
+    qlUserName = "Pro User";
+    qlLicenseStatus = "unlimited";
+
     qlMinimized = res.ql_minimized || false;
     qlHeight = res.ql_height || 520;
     qlDeviceId = await getDeviceId();
