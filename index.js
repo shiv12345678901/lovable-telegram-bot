@@ -86,6 +86,12 @@ io.on('connection', (socket) => {
       console.log('[WebSocket] Fetching projects dashboard...');
       const projects = await scrapeProjects(session);
       socket.emit('projects-list', projects);
+      
+      // Sync processing state on connection/refresh
+      socket.emit('session-state', {
+        isProcessing: session.isProcessing,
+        activeProject: session.activeProject ? session.activeProject.name : null
+      });
     } catch (err) {
       console.error('[WebSocket] Projects fetch failed:', err.message);
       socket.emit('operation-failed', { error: err.message });
@@ -126,7 +132,8 @@ io.on('connection', (socket) => {
         session,
         // onUpdate
         async (statusText, fileOps, progressText, terminalLogs) => {
-          socket.emit('build-update', {
+          console.log(`[WebSocket] Broadcaster build-update status: "${statusText}"`);
+          io.emit('build-update', {
             status: statusText,
             files: fileOps,
             progress: progressText,
@@ -135,14 +142,16 @@ io.on('connection', (socket) => {
         },
         // onQuestion
         async (questionText, options) => {
-          socket.emit('build-question', {
+          console.log(`[WebSocket] Broadcaster build-question: "${questionText}"`);
+          io.emit('build-question', {
             question: questionText,
             options: options
           });
         },
         // onFinished
         async (previewUrl, fullResponse) => {
-          socket.emit('build-finished', {
+          console.log(`[WebSocket] Broadcaster build-finished. URL: ${previewUrl}`);
+          io.emit('build-finished', {
             url: previewUrl,
             response: fullResponse
           });
@@ -150,7 +159,8 @@ io.on('connection', (socket) => {
         },
         // onTimeout
         async () => {
-          socket.emit('operation-failed', { error: 'Observation Timeout: Build took longer than 5 minutes.' });
+          console.log('[WebSocket] Broadcaster build-timeout.');
+          io.emit('operation-failed', { error: 'Observation Timeout: Build took longer than 5 minutes.' });
           session.isProcessing = false;
         }
       );

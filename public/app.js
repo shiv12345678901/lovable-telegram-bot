@@ -66,6 +66,30 @@ socket.on('projects-list', (projects) => {
   });
 });
 
+// Restore state from socket on reconnect/refresh
+socket.on('session-state', (data) => {
+  console.log('[WebSocket] Session state synced:', data);
+  if (data.activeProject) {
+    activeProjectName.textContent = data.activeProject;
+    statusBadge.className = 'status-indicator active';
+    statusBadge.innerHTML = '<span class="dot"></span> Connected';
+    btnSubmit.disabled = false;
+    
+    // Find index by name and highlight card
+    const idx = currentProjectList.findIndex(p => p.name === data.activeProject);
+    if (idx !== -1) {
+      activeProjectIndex = idx;
+      document.querySelectorAll('.project-card').forEach((el, cardIdx) => {
+        el.classList.toggle('active', cardIdx === idx);
+      });
+    }
+  }
+  
+  if (data.isProcessing) {
+    setLoading(true);
+  }
+});
+
 // Activate selected project
 function selectProject(index) {
   activeProjectIndex = index;
