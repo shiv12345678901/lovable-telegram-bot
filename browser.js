@@ -117,6 +117,31 @@ export async function initBrowser(session) {
   const pages = session.context.pages();
   session.page = pages.length > 0 ? pages[0] : await session.context.newPage();
   console.log('[Browser] Ready.');
+
+  // Pre-seed extension storage to bypass gates and enable custom UI immediately
+  try {
+    const serviceWorker = session.context.serviceWorkers()[0] 
+      || await session.context.waitForEvent("serviceworker", { timeout: 15000 });
+      
+    if (serviceWorker) {
+      console.log('[Browser] Pre-seeding extension storage to activate floating UI...');
+      await serviceWorker.evaluate(async () => {
+        await new Promise((resolve) => {
+          chrome.storage.local.set({
+            ql_channel_redirected: true,
+            ql_license_valid: true,
+            ql_license_key: "INTERNAL",
+            ql_sidebar_mode: true
+          }, resolve);
+        });
+      });
+      console.log('[Browser] Extension storage pre-seeded.');
+    } else {
+      console.warn('[Browser] Service worker not found for pre-seeding.');
+    }
+  } catch (err) {
+    console.warn('[Browser] Warning pre-seeding extension storage:', err.message);
+  }
 }
 
 /**
