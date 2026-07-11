@@ -70,14 +70,15 @@ export async function initBrowser(session) {
     session.isProcessing = false;
   });
 
-  // Inject anti-detection script to hide webdriver flag
+  // Inject anti-detection script to hide webdriver flag.
+  // Do NOT stub chrome.runtime.sendMessage — that is not available in the page
+  // world anyway; a fake empty runtime object only confuses diagnostics.
   await session.context.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', {
-      get: () => undefined
-    });
-    window.chrome = {
-      runtime: {}
-    };
+    try {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined
+      });
+    } catch (_) {}
   });
 
   let cookieValue = process.env.LOVABLE_SESSION_COOKIE;
@@ -228,33 +229,84 @@ export async function openProjectWorkspace(session, projectUrl) {
 }
 
 /**
- * #5: Chunk typing — types in word-sized chunks (5x faster than char-by-char).
- * Types prompt into editor and clicks submit.
+ * Submit a prompt into Lovable's chat UI via native DOM (Playwright).
+ *
+ * NOTE: page.evaluate() runs in the PAGE world — chrome.runtime is NOT available there
+ * (only in extension content scripts / service workers). Calling chrome.runtime.sendMessage
+ * from evaluate always fails with "sendMessage is not a function".
  */
 export async function submitPrompt(session, promptText) {
   const { page } = session;
   if (!page) throw new Error('No active page. Select a project first.');
 
-  console.log('[Browser] Submitting prompt via Chrome Extension message interface...');
+  const text = String(promptText || '').trim();
+  if (!text) throw new Error('Prompt text is empty.');
 
-  const result = await page.mainFrame().evaluate(async (text) => {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage({
-        action: "sendPromptToLovable",
-        message: text
-      }, (response) => {
-        resolve(response || { ok: false, error: "No response from extension background script" });
-      });
-    });
-  }, promptText);
+  console.log('[Browser] Submitting prompt via native chat DOM...');
 
-  console.log('[Browser] Extension submission response:', result);
-  if (!result || result.ok !== true) {
-    throw new Error(result?.error || 'Failed to submit prompt through the Chrome Extension.');
+  // Prefer official chat form when present
+  const form = page.locator('form#chat-input').first();
+  const editor = form.locator('[contenteditable="true"]').first()
+    .or(page.locator('form#chat-input [contenteditable="true"]').first())
+    .or(page.locator('[contenteditable="true"]').first());
+
+  try {
+    await editor.waitFor({ state: 'visible', timeout: 20000 });
+  } catch {
+    throw new Error('Lovable chat editor not found. Open a project and wait for the editor to load.');
   }
 
-  console.log('[Browser] ✅ Prompt accepted and queued via Extension.');
-  await page.waitForTimeout(2000);
+  await editor.click({ timeout: 10000 });
+  // Clear existing content then insert full prompt (works with React-controlled editors)
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.press('Backspace');
+  // insertText is more reliable than type() for long prompts
+  await page.keyboard.insertText(text);
+
+  // Give React a moment to enable the send button
+  await page.waitForTimeout(400);
+
+  const sendBtn = page.locator('#chatinput-send-message-button').first()
+    .or(page.locator('form#chat-input button[type="submit"]').first())
+    .or(page.locator('form#chat-input button[aria-label*="send" i]').first())
+    .or(page.locator('form#chat-input button').last());
+
+  // Force-enable if Lovable left it disabled after programmatic fill
+  await page.evaluate(() => {
+    const btn =
+      document.getElementById('chatinput-send-message-button') ||
+      document.querySelector('form#chat-input button[type="submit"]') ||
+      document.querySelector('form#chat-input button[aria-label*="send" i]');
+    if (btn) {
+      btn.removeAttribute('disabled');
+      btn.removeAttribute('aria-disabled');
+      if (btn instanceof HTMLButtonElement) btn.disabled = false;
+    }
+  });
+
+  try {
+    await sendBtn.click({ timeout: 10000 });
+  } catch (err) {
+    // Fallback: submit the form
+    const submitted = await page.evaluate(() => {
+      const f = document.querySelector('form#chat-input');
+      if (!f) return false;
+      if (typeof f.requestSubmit === 'function') {
+        f.requestSubmit();
+        return true;
+      }
+      f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      return true;
+    });
+    if (!submitted) {
+      throw new Error(
+        'Send button not clickable: ' + (err && err.message ? err.message : String(err))
+      );
+    }
+  }
+
+  console.log('[Browser] ✅ Prompt submitted via native DOM.');
+  await page.waitForTimeout(1500);
 }
 
 /**
