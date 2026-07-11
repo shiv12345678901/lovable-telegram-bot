@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lovable Remote Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="dark-theme">
+  <!-- Glowing Background Orbs -->
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <span class="logo-icon">🔮</span>
+        <div class="logo-text">
+          <h1>Lovable.dev</h1>
+          <span class="status-badge" id="bot-status"><span class="pulse-dot"></span> Remote UI</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-reload-dashboard" class="btn btn-secondary">🔄 Refresh Projects</button>
+        <button id="btn-stop-browser" class="btn btn-danger">🛑 Kill Session</button>
+      </div>
+    </header>
+
+    <div class="main-layout">
+      <!-- Sidebar: Projects list -->
+      <aside class="sidebar card">
+        <div class="card-header">
+          <h2>Active Workspaces</h2>
+        </div>
+        <div class="projects-list" id="projects-container">
+          <div class="loading-state">Loading workspaces...</div>
+        </div>
+      </aside>
+
+      <!-- Center Panel: Terminal & Prompt Input -->
+      <main class="content-panel">
+        <!-- Live Terminal Stream -->
+        <section class="terminal-card card">
+          <div class="card-header terminal-header">
+            <div class="window-dots">
+              <span class="dot red"></span>
+              <span class="dot yellow"></span>
+              <span class="dot green"></span>
+            </div>
+            <div class="terminal-title">Realtime Compiler Activity</div>
+            <div class="build-step" id="progress-indicator">Idle</div>
+          </div>
+          <div class="terminal-body" id="terminal-output">
+            <div class="terminal-line system-msg">> Systems initialized. Ready to receive prompts.</div>
+          </div>
+        </section>
+
+        <!-- Prompt Composer -->
+        <section class="composer-card card">
+          <div class="prompt-suggestions">
+            <span class="suggest-pill" onclick="insertPrompt('Fix the alignment of this UI layout')">🎨 Fix alignment</span>
+            <span class="suggest-pill" onclick="insertPrompt('Add a dark mode toggle to the dashboard')">🌙 Dark mode</span>
+            <span class="suggest-pill" onclick="insertPrompt('Optimize image loading and add lazy load')">⚡ Optimize page</span>
+          </div>
+          <div class="composer-input-wrapper">
+            <textarea id="prompt-input" placeholder="Ask Lovable to edit, improve, or build something... (Ctrl+Enter to send)"></textarea>
+            <div class="composer-footer">
+              <span class="char-counter" id="char-counter">0 chars</span>
+              <div class="composer-buttons">
+                <button id="btn-cancel" class="btn btn-secondary" disabled>Cancel</button>
+                <button id="btn-submit" class="btn btn-primary">Deploy Prompt 🚀</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Right Panel: Live Snapshot Preview & File list -->
+      <aside class="preview-panel">
+        <section class="screenshot-card card">
+          <div class="card-header">
+            <h2>Live Viewport</h2>
+            <button id="btn-snapshot" class="btn btn-small">📸 Snapshot</button>
+          </div>
+          <div class="screenshot-body" id="screenshot-container">
+            <div class="no-preview">No active project viewport loaded</div>
+          </div>
+        </section>
+
+        <section class="files-card card">
+          <div class="card-header">
+            <h2>File Operations</h2>
+          </div>
+          <div class="files-body" id="files-container">
+            <div class="no-files">No current file changes tracked</div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
