@@ -48,6 +48,21 @@ function apiHeaders(extra) {
   return typeof powerkitsApiHeaders === "function" ? powerkitsApiHeaders(extra) : gringowApiHeaders(extra);
 }
 
+function safeSendMessage(message, callback) {
+  if (typeof chrome !== 'undefined' && chrome.runtime && typeof chrome['runtime']['sendMessage'] === 'function') {
+    try {
+      chrome['runtime']['sendMessage'](message, callback);
+    } catch (e) {
+      console.warn("[QL] sendMessage failed:", e);
+      if (typeof callback === 'function') callback({ success: false, error: e.message });
+    }
+  } else {
+    console.warn("[QL] safeSendMessage is not available.");
+    if (typeof callback === 'function') callback({ success: false, error: "safeSendMessage not available" });
+  }
+}
+
+
 function setPkCreditBypass(on) {
   if (typeof window.__pkSetCreditBypass === "function") {
     window.__pkSetCreditBypass(!!on);
@@ -210,7 +225,7 @@ function buildSessionHeaders(projectId) {
       "sec-fetch-site": "same-site"
     };
     try {
-      chrome.runtime.sendMessage({ action: "getLovableCookies" }, function (resp) {
+      safeSendMessage({ action: "getLovableCookies" }, function (resp) {
         if (resp && resp.cookie) headers["cookie"] = resp.cookie;
         resolve(headers);
       });
@@ -256,7 +271,7 @@ function projectIdFromPage() {
 
 function readAuthTokensFromCookies() {
   return new Promise(function (resolve) {
-    chrome.runtime.sendMessage({ action: 'readCookies' }, function (resp) {
+    safeSendMessage({ action: 'readCookies' }, function (resp) {
       if (!resp || !resp.tokens || !resp.tokens.length) return resolve('');
       resolve(pickBestToken(resp.tokens.map(function (x) { return x.token; })));
     });
@@ -293,7 +308,7 @@ async function captureLovableSessionFromPage() {
 
 async function resolveLovableAuth() {
   await new Promise(function (resolve) {
-    chrome.runtime.sendMessage({
+    safeSendMessage({
       action: "syncLovableAuth",
       tabUrl: location.href,
       projectId: projectIdFromPage()
@@ -389,7 +404,7 @@ function bgFetch(url, options = {}) {
   const vendorFeatureCompat = options.vendorFeatureCompat === true || options.featureUiCompat === true;
   return new Promise((resolve, reject) => {
     if (typeof POWERKITS_DEBUG !== "undefined" && POWERKITS_DEBUG) console.log("[QL] bgFetch ->", url);
-    chrome.runtime.sendMessage({
+    safeSendMessage({
       action: "proxyFetch",
       url,
       method: options.method || "POST",
@@ -570,7 +585,7 @@ function showChannelGate(box) {
     const btn = document.getElementById("ql-join-channel-btn");
     if (btn) {
       btn.addEventListener("click", () => {
-        chrome.runtime.sendMessage({ action: "openTab", url: "https://lovable.dev/" });
+        safeSendMessage({ action: "openTab", url: "https://lovable.dev/" });
         chrome.storage.local.set({ ql_channel_redirected: true }, () => {
           box.remove();
           _buildFloatingUI();
@@ -751,7 +766,7 @@ function showMainUI(box) {
           floatingBox.style.transform = "translateX(20px) scale(0.95)";
         }
 
-        chrome.runtime.sendMessage({ action: "activateSidebar" }, (resp) => {
+        safeSendMessage({ action: "activateSidebar" }, (resp) => {
           if (resp && resp.ok && !resp.deferred) {
             setTimeout(() => {
               if (floatingBox) floatingBox.remove();
@@ -1900,7 +1915,7 @@ if (typeof SIDE_PANEL_ONLY !== "undefined" && SIDE_PANEL_ONLY) {
 }
 
 function updateSyncStatus() {
-  chrome.runtime.sendMessage({
+  safeSendMessage({
     action: "syncLovableAuth",
     tabUrl: location.href,
     projectId: projectIdFromPage()
@@ -2674,7 +2689,7 @@ function setupDownloadProject() {
       if (!projectId) throw new Error('Open a Lovable project page first.');
       if (!authToken) {
         var cookieResponse = await new Promise(function (resolve) {
-          chrome.runtime.sendMessage({ action: "readCookies" }, function (resp) { resolve(resp); });
+          safeSendMessage({ action: "readCookies" }, function (resp) { resolve(resp); });
         });
         if (cookieResponse && cookieResponse.success && cookieResponse.tokens && cookieResponse.tokens.length > 0) {
           authToken = cookieResponse.tokens[0].token;
@@ -2686,7 +2701,7 @@ function setupDownloadProject() {
       if (statusEl) statusEl.textContent = 'Downloading project files...';
 
       var dlResponse = await new Promise(function (resolve) {
-        chrome.runtime.sendMessage({ action: "downloadProject", projectId: projectId, token: authToken }, function (resp) { resolve(resp); });
+        safeSendMessage({ action: "downloadProject", projectId: projectId, token: authToken }, function (resp) { resolve(resp); });
       });
 
       if (!dlResponse || !dlResponse.success) throw new Error(dlResponse && dlResponse.error ? dlResponse.error : 'Download failed');
@@ -3044,7 +3059,7 @@ chrome.storage.local.get(["ql_native_chat"], (res) => {
 window.addEventListener("message", (event) => {
   if (!event.data || event.source !== window) return;
   if (event.data.type === "lovableBrowserSession" && event.data.browserSessionId) {
-    chrome.runtime.sendMessage({
+    safeSendMessage({
       action: "lovableSync",
       browserSessionId: event.data.browserSessionId
     });
@@ -3059,7 +3074,7 @@ window.addEventListener("message", (event) => {
     updates.lovable_projectId = event.data.projectId;
   }
   if (!Object.keys(updates).length) return;
-  chrome.runtime.sendMessage({ action: "lovableSync", token: updates.lovable_token, projectId: updates.lovable_projectId });
+  safeSendMessage({ action: "lovableSync", token: updates.lovable_token, projectId: updates.lovable_projectId });
   chrome.storage.local.set(updates, () => {
     updateSyncStatus();
   });
@@ -3072,7 +3087,7 @@ if (location.hostname && location.hostname.indexOf("lovable.dev") !== -1) {
 (function initLovableAuthSync() {
   if (!location.hostname || location.hostname.indexOf("lovable.dev") === -1) return;
   function run() {
-    chrome.runtime.sendMessage({
+    safeSendMessage({
       action: "syncLovableAuth",
       tabUrl: location.href,
       projectId: projectIdFromPage()
@@ -3176,7 +3191,7 @@ function startOutputObservation() {
       lastObservedText = targetElement.textContent || "";
       
       // Notify background that generation started
-      chrome.runtime.sendMessage({
+      safeSendMessage({
         action: "lovableGenerationStarted",
         initialText: lastObservedText
       });
@@ -3185,7 +3200,7 @@ function startOutputObservation() {
         const currentText = targetElement.textContent || "";
         if (currentText !== lastObservedText) {
           lastObservedText = currentText;
-          chrome.runtime.sendMessage({
+          safeSendMessage({
             action: "lovableGenerationUpdated",
             text: currentText
           });
@@ -3196,7 +3211,7 @@ function startOutputObservation() {
         if (!stopBtn) {
           observer.disconnect();
           isObservingOutput = false;
-          chrome.runtime.sendMessage({
+          safeSendMessage({
             action: "lovableGenerationFinished",
             finalText: currentText
           });

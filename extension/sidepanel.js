@@ -253,7 +253,7 @@
         "sec-fetch-site": "same-site"
       };
       try {
-        chrome.runtime.sendMessage({ action: "getLovableCookies" }, function (resp) {
+        safeSendMessage({ action: "getLovableCookies" }, function (resp) {
           if (resp && resp.cookie) headers["cookie"] = resp.cookie;
           resolve(headers);
         });
@@ -264,11 +264,23 @@
   }
 
   // --- Utilities ---
-  function safeSendMessage(msg) {
+  function safeSendMessage(msg, cb) {
+    if (typeof cb === 'function') {
+      if (typeof chrome !== 'undefined' && chrome.runtime && typeof chrome['runtime']['sendMessage'] === 'function') {
+        try {
+          chrome['runtime']['sendMessage'](msg, cb);
+        } catch (e) {
+          cb(null);
+        }
+      } else {
+        cb(null);
+      }
+      return;
+    }
     return new Promise((resolve, reject) => {
       try {
-        if (!chrome.runtime || !chrome.runtime.id) return reject(new Error("Extension context invalidated"));
-        chrome.runtime.sendMessage(msg, (resp) => {
+        if (typeof chrome === 'undefined' || !chrome.runtime || typeof chrome['runtime']['sendMessage'] !== 'function') return reject(new Error("Extension context invalidated"));
+        chrome['runtime']['sendMessage'](msg, (resp) => {
           if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
           resolve(resp);
         });
@@ -283,7 +295,7 @@
       try {
         if (!chrome.runtime || !chrome.runtime.id) return reject(new Error("Extension context invalidated"));
         if (typeof POWERKITS_DEBUG !== "undefined" && POWERKITS_DEBUG) console.log("[SP] bgFetch ->", url);
-        chrome.runtime.sendMessage({ action: "proxyFetch", url, method: opts.method || "POST", headers: opts.headers || {}, body: opts.body || null }, (resp) => {
+        safeSendMessage({ action: "proxyFetch", url, method: opts.method || "POST", headers: opts.headers || {}, body: opts.body || null }, (resp) => {
           if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
           if (!resp) return reject(new Error("No response from background"));
           const data = resp.data;
@@ -362,7 +374,7 @@
 
   function readAuthTokensFromCookies() {
     return new Promise(function (resolve) {
-      chrome.runtime.sendMessage({ action: 'readCookies' }, function (resp) {
+      safeSendMessage({ action: 'readCookies' }, function (resp) {
         if (!resp || !resp.tokens || !resp.tokens.length) return resolve('');
         resolve(pickBestToken(resp.tokens.map(function (x) { return x.token; })));
       });
@@ -374,7 +386,7 @@
       findLovableProjectTab(function (tab) { resolve(tab); });
     });
     await new Promise(function (resolve) {
-      chrome.runtime.sendMessage({
+      safeSendMessage({
         action: "syncLovableAuth",
         tabUrl: lovableTab && lovableTab.url || "",
         projectId: projectIdFromTabUrl(lovableTab && lovableTab.url)
@@ -1007,7 +1019,7 @@
 
   function updateSync() {
     findLovableProjectTab(function (tab) {
-      chrome.runtime.sendMessage({
+      safeSendMessage({
         action: 'syncLovableAuth',
         tabUrl: tab && tab.url || '',
         projectId: projectIdFromTabUrl(tab && tab.url)
@@ -1325,7 +1337,7 @@
 
   function sendPromptViaLovableTab(finalMsg) {
     return new Promise(function (resolve, reject) {
-      chrome.runtime.sendMessage({ action: "sendPromptToLovable", message: finalMsg }, function (resp) {
+      safeSendMessage({ action: "sendPromptToLovable", message: finalMsg }, function (resp) {
         if (chrome.runtime.lastError) {
           return reject(new Error(chrome.runtime.lastError.message));
         }
@@ -1463,8 +1475,8 @@
         telegram_enabled: enabled
       }, function () {
         refreshStatus();
-        if (chrome.runtime && chrome.runtime.sendMessage) {
-          chrome.runtime.sendMessage({ action: 'telegramConfigUpdated' }, function () { });
+        if (chrome.runtime && safeSendMessage) {
+          safeSendMessage({ action: 'telegramConfigUpdated' }, function () { });
         }
       });
       showAlert('Saved', 'Telegram settings saved successfully.');
@@ -1766,7 +1778,7 @@
         btn.textContent = '📡 Downloading...';
 
         var dlResponse = await new Promise(function (resolve) {
-          chrome.runtime.sendMessage({ action: "downloadProject", projectId: projectId, token: authToken }, function (resp) { resolve(resp); });
+          safeSendMessage({ action: "downloadProject", projectId: projectId, token: authToken }, function (resp) { resolve(resp); });
         });
 
         if (!dlResponse || !dlResponse.success) {
