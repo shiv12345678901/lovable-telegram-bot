@@ -137,9 +137,17 @@
   }
 
   async function sendNativeToLovable(text) {
-    var chatForm = document.querySelector("form#chat-input");
-    if (!chatForm) throw new Error("Lovable chat not found. Open your project on lovable.dev.");
-    var editor = chatForm.querySelector('[contenteditable="true"]');
+    var chatForm = null;
+    var editor = null;
+    for (var i = 0; i < 24; i++) {
+      chatForm = document.querySelector("form#chat-input");
+      if (chatForm) {
+        editor = chatForm.querySelector('[contenteditable="true"]');
+        if (editor) break;
+      }
+      await new Promise(function (r) { setTimeout(r, 500); });
+    }
+    if (!chatForm) throw new Error("Lovable chat not found. Open your project on lovable.dev and wait for the workspace to load.");
     if (!editor) throw new Error("Chat editor not found. Wait for the page to finish loading.");
     editor.focus();
     document.execCommand("selectAll", false, null);
@@ -148,7 +156,7 @@
       editor.dispatchEvent(new Event('input', { bubbles: true }));
     } catch (e) { }
     // Wait for React to process input and enable/render the send button (vendor 3.8.6)
-    await new Promise(function (r) { setTimeout(r, 300); });
+    await new Promise(function (r) { setTimeout(r, 400); });
     var sendBtn = document.getElementById("chatinput-send-message-button") || (chatForm && (chatForm.querySelector('button[type="submit"]') || chatForm.querySelector('button[aria-label*="send" i]') || chatForm.querySelector('button:last-of-type')));
     if (!sendBtn) throw new Error("Send button not found.");
     var wasDisabled = sendBtn.disabled;
