@@ -295,6 +295,12 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
   console.log(`✅ [HTTP Server] Listening on 0.0.0.0:${PORT}`);
   console.log(`ℹ️ [HTTP Server] Health: http://127.0.0.1:${PORT}/health`);
 
+  if (process.env.DISABLE_TELEGRAM === 'true') {
+    console.log('ℹ️ [Bot] Telegram Bot integration is disabled via DISABLE_TELEGRAM config. Running Web-only mode.');
+    sessionManager.startIdleCleanup(30 * 60 * 1000);
+    return;
+  }
+
   if (!hasValidToken) {
     console.error('❌ TELEGRAM_BOT_TOKEN is not configured.');
     console.error('   Add Space Secret TELEGRAM_BOT_TOKEN, then Factory reboot the Space.');
