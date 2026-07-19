@@ -1863,7 +1863,8 @@
     });
   }
 
-  // Community Join Popup removed — caused overlay blocking in automation.
+  // Community popup removed.
+  function setupWhatsAppPopup() { /* no-op */ }
 
   function showChannelGate() {
     const body = document.getElementById('sp-body');

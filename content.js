@@ -882,7 +882,7 @@ function setupOptimize() {
 var _whatsappPopupShown = false;
 var QL_JOIN_POPUP_SEEN_KEY = 'ql_join_popup_seen_v3';
 
-// Community Join Popup removed — caused overlay blocking in automation.
+// Community popup removed.
 function setupWhatsAppPopup() { /* no-op */ }
 
 function setupSpeech() {

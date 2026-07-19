@@ -1,133 +1,440 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lovable.dev Remote Control</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cloud Automation Terminal — Orchestrator Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+            sans: ['Inter', 'system-ui', 'sans-serif']
+          },
+          colors: {
+            brand: {
+              black: '#08090d',
+              dark: '#0e1017',
+              panel: '#151722',
+              card: '#1c1f2e',
+              border: '#26293b',
+              purple: '#8b5cf6',
+              blue: '#3b82f6',
+              green: '#10b981',
+              amber: '#f59e0b',
+              orange: '#f97316',
+              red: '#ef4444'
+            }
+          },
+          boxShadow: {
+            glow: '0 0 20px rgba(139, 92, 246, 0.15)',
+            'glow-green': '0 0 20px rgba(16, 185, 129, 0.2)',
+            'glow-orange': '0 0 20px rgba(249, 115, 22, 0.2)',
+            'glow-amber': '0 0 20px rgba(245, 158, 11, 0.2)'
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!-- Lucide icons via CDN -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
-</head>
-<body class="lovable-dark">
-  <div class="app-layout">
+  <style>
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #26293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #8b5cf6; }
+
+    .glow-purple { box-shadow: 0 0 30px rgba(139, 92, 246, 0.08); }
     
-    <!-- Left Sidebar: Projects List -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <span class="logo-spark">✨</span>
-        <span class="logo-title">Lovable Remote</span>
+    .status-badge {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .terminal-line {
+      animation: fadeIn 0.15s ease forwards;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(2px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .grid-overlay {
+      background-image: linear-gradient(rgba(139, 92, 246, 0.02) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(139, 92, 246, 0.02) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    .remote-overlay-glow {
+      background: radial-gradient(circle at center, rgba(139, 92, 246, 0.05) 0%, transparent 70%);
+    }
+
+    .typing-dot {
+      animation: typingBounce 1.2s infinite ease-in-out;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typingBounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-4px); }
+    }
+  </style>
+</head>
+<body class="bg-brand-black text-white font-sans antialiased overflow-hidden h-screen w-screen selection:bg-brand-purple/30 selection:text-white">
+
+  <!-- ═══════════════════════════════════════════════ MAIN LAYOUT ═══ -->
+  <div class="flex h-screen w-screen overflow-hidden">
+
+    <!-- ╔══════════════════════════════════════════════════════════════╗ -->
+    <!-- ║  1. CONFIGURATION & CONTROLS PANEL (LEFT SIDEBAR)           ║ -->
+    <!-- ╚══════════════════════════════════════════════════════════════╝ -->
+    <aside class="w-80 flex-shrink-0 flex flex-col bg-brand-panel border-r border-brand-border glow-purple overflow-hidden">
+      
+      <!-- Top header branding -->
+      <div class="px-5 py-4.5 border-b border-brand-border flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-brand-purple/15 border border-brand-purple/35 flex items-center justify-center flex-shrink-0 shadow-glow">
+          <i data-lucide="shield-alert" class="w-4.5 h-4.5 text-brand-purple animate-pulse"></i>
+        </div>
+        <div>
+          <div class="text-sm font-semibold tracking-wide text-white">AUTOMATION TERMINAL</div>
+          <div class="text-[9px] text-white/30 font-mono mt-0.5 tracking-widest uppercase">Remote Cloud Orchestrator</div>
+        </div>
       </div>
-      <div class="section-title">Workspaces</div>
-      <div class="projects-list" id="projects-container">
-        <div class="loading-spinner">Loading projects...</div>
+
+      <!-- Config & controls scrolling container -->
+      <div class="flex-1 overflow-y-auto px-5 py-6 space-y-6">
+
+        <!-- Target Prompt Field -->
+        <div class="space-y-2">
+          <label class="flex items-center gap-2 text-[10px] font-bold text-white/40 uppercase tracking-widest">
+            <i data-lucide="terminal" class="w-3.5 h-3.5 text-brand-purple"></i>
+            Target Prompt
+          </label>
+          <textarea
+            id="prompt-input"
+            rows="5"
+            placeholder="Provide prompt directions to dispatch to the remote cloud automation container... e.g. 'Fix the dashboard navigation layout'"
+            class="w-full bg-brand-card border border-brand-border rounded-xl px-3.5 py-3 text-xs text-white/80 placeholder-white/20 resize-none outline-none focus:border-brand-purple/50 focus:ring-1 focus:ring-brand-purple/20 transition font-mono leading-relaxed shadow-inner"
+          ></textarea>
+          <div class="flex justify-between items-center text-[10px]">
+            <span class="text-white/20 font-mono" id="char-counter">0 chars</span>
+            <div class="flex gap-1.5">
+              <button onclick="insertSuggest('Verify login flow and load workspace list')" class="px-2.5 py-0.5 rounded-md bg-brand-purple/10 border border-brand-purple/25 text-brand-purple/90 hover:bg-brand-purple/20 transition text-[9px] font-mono">Verify flow</button>
+              <button onclick="insertSuggest('Deploy fresh components with rich aesthetics')" class="px-2.5 py-0.5 rounded-md bg-brand-blue/10 border border-brand-blue/25 text-brand-blue/90 hover:bg-brand-blue/20 transition text-[9px] font-mono">Rich UI</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Masked Auth Session ID / Token Field -->
+        <div class="space-y-2">
+          <label class="flex items-center gap-2 text-[10px] font-bold text-white/40 uppercase tracking-widest">
+            <i data-lucide="key-round" class="w-3.5 h-3.5 text-brand-purple"></i>
+            Authentication Token
+          </label>
+          <div class="relative">
+            <input
+              id="auth-token"
+              type="password"
+              placeholder="lovable-session-id-v2 · · · · · · · ·"
+              class="w-full bg-brand-card border border-brand-border rounded-xl pl-3.5 pr-10 py-3 text-xs text-white/80 placeholder-white/20 outline-none focus:border-brand-purple/50 focus:ring-1 focus:ring-brand-purple/20 transition font-mono shadow-inner"
+            />
+            <button id="toggle-token" onclick="toggleTokenVisibility()" class="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <p class="text-[10px] text-white/25 leading-relaxed font-mono">Container Auth: JWT session token will remain securely masked and hidden from view.</p>
+        </div>
+
+        <!-- Connection Status & Steps Indicator -->
+        <div class="rounded-2xl bg-brand-card/50 border border-brand-border p-4.5 space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold text-white/40 uppercase tracking-widest">Connection Status</span>
+            <div id="status-badge" class="flex items-center gap-2 px-2.5 py-1 rounded-full bg-brand-black/40 border border-brand-border text-[10px] font-mono status-badge">
+              <span class="w-2 h-2 rounded-full bg-brand-border" id="status-dot"></span>
+              <span id="status-text" class="text-white/40">Disconnected</span>
+            </div>
+          </div>
+          
+          <div class="w-full bg-brand-black rounded-full h-1 overflow-hidden">
+            <div id="status-progress" class="h-full rounded-full bg-brand-border transition-all duration-700" style="width:0%"></div>
+          </div>
+          
+          <div class="grid grid-cols-4 gap-1.5">
+            <div class="step-indicator text-[9px] text-center space-y-1.5 font-mono" id="step-connect">
+              <div class="h-1 rounded bg-brand-border/40 transition-all duration-500"></div>
+              <span class="text-white/25">SOCKET</span>
+            </div>
+            <div class="step-indicator text-[9px] text-center space-y-1.5 font-mono" id="step-init">
+              <div class="h-1 rounded bg-brand-border/40 transition-all duration-500"></div>
+              <span class="text-white/25">INIT</span>
+            </div>
+            <div class="step-indicator text-[9px] text-center space-y-1.5 font-mono" id="step-chrome">
+              <div class="h-1 rounded bg-brand-border/40 transition-all duration-500"></div>
+              <span class="text-white/25">CHROME</span>
+            </div>
+            <div class="step-indicator text-[9px] text-center space-y-1.5 font-mono" id="step-sync">
+              <div class="h-1 rounded bg-brand-border/40 transition-all duration-500"></div>
+              <span class="text-white/25">SYNC</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sync Workspace List -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="flex items-center gap-2 text-[10px] font-bold text-white/40 uppercase tracking-widest">
+              <i data-lucide="folder-git" class="w-3.5 h-3.5 text-brand-purple"></i>
+              Projects
+            </label>
+            <button onclick="reloadProjects()" class="text-[10px] text-brand-purple/75 hover:text-brand-purple transition flex items-center gap-1 font-mono">
+              <i data-lucide="refresh-cw" class="w-3 h-3"></i> Sync List
+            </button>
+          </div>
+          <div id="projects-container" class="space-y-2 max-h-48 overflow-y-auto">
+            <div class="text-[10px] text-white/20 text-center py-5 font-mono">Idle: Connect server first</div>
+          </div>
+        </div>
+
       </div>
-      <div class="sidebar-footer">
-        <button id="btn-start-instance" class="action-btn success-hover" title="Launch browser context">🟢 Start Instance</button>
-        <button id="btn-reload-dashboard" class="action-btn" title="Refresh project list">🔄 Sync List</button>
-        <button id="btn-stop-browser" class="action-btn danger-hover" title="Kill browser context">🛑 Terminate</button>
+
+      <!-- Action Button Panel -->
+      <div class="px-5 py-5 border-t border-brand-border space-y-3 bg-brand-black/35">
+        <button
+          id="btn-launch"
+          class="w-full py-3.5 rounded-xl text-xs font-semibold tracking-wider uppercase text-white flex items-center justify-center gap-2 transition bg-gradient-to-r from-brand-purple to-violet-700 hover:shadow-glow disabled:opacity-50"
+        >
+          <i data-lucide="rocket" class="w-4.5 h-4.5" id="launch-icon"></i>
+          <span id="launch-label">Launch Automation Session</span>
+        </button>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="requestSnapshot()" class="py-2.5 rounded-lg bg-brand-card border border-brand-border text-[10px] font-mono text-white/45 hover:text-white/80 hover:border-white/20 transition flex items-center justify-center gap-1">
+            <i data-lucide="camera" class="w-3 h-3"></i> Snap
+          </button>
+          <button onclick="cancelBuild()" class="py-2.5 rounded-lg bg-brand-card border border-brand-border text-[10px] font-mono text-white/45 hover:text-brand-red/80 hover:border-brand-red/20 transition flex items-center justify-center gap-1">
+            <i data-lucide="square-terminal" class="w-3 h-3"></i> Stop
+          </button>
+          <button onclick="stopSession()" class="py-2.5 rounded-lg bg-brand-card border border-brand-border text-[10px] font-mono text-white/45 hover:text-brand-red/80 hover:border-brand-red/20 transition flex items-center justify-center gap-1">
+            <i data-lucide="power" class="w-3 h-3"></i> Kill
+          </button>
+        </div>
       </div>
     </aside>
 
-    <!-- Main Workspace Area -->
-    <main class="workspace-area">
-      
-      <!-- Center: Prompt & Chat log (just like Lovable's chat window) -->
-      <section class="chat-section">
-        <div class="workspace-header">
-          <div class="active-project-info">
-            <h2 id="active-project-name">Select a Project</h2>
-            <span class="status-indicator idle" id="status-badge"><span class="dot"></span> Offline</span>
-          </div>
-          <div class="actions">
-            <button id="btn-cancel" class="btn btn-secondary btn-small" disabled>Cancel</button>
+    <!-- ╔══════════════════════════════════════════════════════════════╗ -->
+    <!-- ║  2. REAL-TIME MONITORING LIVE STREAM WINDOW (CENTER VIEWPORT)║ -->
+    <!-- ╚══════════════════════════════════════════════════════════════╝ -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden border-r border-brand-border">
+
+      <!-- Viewport Header Toolbar -->
+      <div class="flex-shrink-0 px-5 py-3.5 bg-brand-panel border-b border-brand-border flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <i data-lucide="monitor" class="w-4 h-4 text-white/30 animate-pulse"></i>
+          <span class="text-xs font-semibold text-white/60">Cloud Browser Virtual Display</span>
+          <div class="w-px h-3.5 bg-brand-border"></div>
+          <span class="text-[10px] font-mono text-white/30" id="stream-meta">No connection handshake</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-[10px] font-mono text-white/20 truncate max-w-[120px]" id="active-project-name">—</span>
+          <div id="stream-status-badge" class="px-2.5 py-1 rounded-full bg-brand-black border border-brand-border text-[9px] font-mono text-white/30 flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-brand-border" id="stream-dot"></span>
+            Offline
           </div>
         </div>
+      </div>
 
-        <!-- Chat Stream showing prompts and compiler progress -->
-        <div class="chat-stream" id="chat-stream-container">
-          <div class="system-bubble">
-            <p>Welcome to Lovable Remote. Select a project workspace from the left panel to begin prompting.</p>
-          </div>
-        </div>
-
-        <!-- Composer Box (Just like Lovable's input text area) -->
-        <div class="composer-section">
-          <div class="prompt-suggestions">
-            <button onclick="insertPrompt('Fix the centering alignment of this container')">🎨 Center container</button>
-            <button onclick="insertPrompt('Add a dark mode toggle to the top navigation')">🌙 Dark mode</button>
-            <button onclick="insertPrompt('Add a search bar to filter items in the list')">🔍 Add search</button>
-          </div>
-          <div class="composer-container">
-            <textarea id="prompt-input" placeholder="How do you want to update your app? (Ctrl+Enter to build)"></textarea>
-            <div class="composer-footer">
-              <span class="char-count" id="char-counter">0 characters</span>
-              <button id="btn-submit" class="btn btn-primary" disabled>
-                <span>Generate Changes</span> <span class="btn-spark">⚡</span>
-              </button>
+      <!-- Main stream container (aspect ratio constrained screen view container) -->
+      <div class="flex-1 relative overflow-hidden grid-overlay bg-brand-black flex items-center justify-center p-6" id="stream-container">
+        
+        <!-- Frame border mimicking a monitor screen -->
+        <div class="w-full h-full max-w-[1920px] max-h-[1080px] aspect-video border border-brand-border rounded-xl bg-brand-panel/40 shadow-2xl relative overflow-hidden flex items-center justify-center">
+          
+          <!-- Radial glow overlay -->
+          <div class="absolute inset-0 remote-overlay-glow pointer-events-none z-10"></div>
+          
+          <!-- ── IDLE / HANDSHAKE STATE ── -->
+          <div id="stream-idle" class="absolute inset-0 flex flex-col items-center justify-center gap-4 z-20">
+            <div class="w-14 h-14 rounded-2xl bg-brand-card/60 border border-brand-border flex items-center justify-center shadow-glow">
+              <i data-lucide="network" class="w-6 h-6 text-brand-purple animate-bounce"></i>
+            </div>
+            <div class="text-center">
+              <div class="text-xs font-semibold text-white/50 tracking-wide">Waiting for cloud websocket stream handshake...</div>
+              <div class="text-[10px] text-white/25 mt-1 font-mono">screencast pipeline offline · ws://localhost:7860/screencast</div>
+            </div>
+            <div class="flex gap-1.5 mt-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-purple/35 animate-bounce" style="animation-delay:0s"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-purple/35 animate-bounce" style="animation-delay:0.15s"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-purple/35 animate-bounce" style="animation-delay:0.3s"></span>
             </div>
           </div>
-        </div>
-      </section>
 
-      <!-- Right: Live App Preview & Logs Tab Panel -->
-      <section class="preview-section">
-        <!-- Tabs Header -->
-        <div class="tab-header">
-          <button class="tab-btn active" onclick="switchTab('app')">🌐 Live App</button>
-          <button class="tab-btn" onclick="switchTab('terminal')">📋 Terminal Logs</button>
-          <button class="tab-btn" onclick="switchTab('files')">📂 Changed Files</button>
-          <button class="tab-btn" onclick="switchTab('screenshot')">📸 Screenshot</button>
-        </div>
+          <!-- ── PLAYWRIGHT / REAL WEBSOCKET SCREENSHOT IMAGE LAYER ── -->
+          <img id="stream-img" src="" alt="Real-time Cloud Browser Screencast Stream" class="absolute inset-0 w-full h-full object-contain hidden z-30" />
 
-        <!-- Tab contents -->
-        <div class="tab-content-container">
-          <!-- 1. Live Preview iframe -->
-          <div class="tab-content active" id="tab-app">
-            <div class="iframe-container" id="iframe-holder">
-              <div class="placeholder-state">
-                <span class="placeholder-icon">🌐</span>
-                <p>No preview compiled. Submit a prompt to generate the live application.</p>
+          <!-- ── SIMULATED / MOCK ACTIVE VIEW ── -->
+          <div id="stream-mock" class="absolute inset-0 z-20 hidden overflow-hidden select-none">
+            <div class="flex h-full w-full bg-brand-dark/95">
+              
+              <!-- Mock Workspace Sidebar -->
+              <div class="w-48 bg-brand-panel border-r border-brand-border flex flex-col p-3.5 gap-3.5">
+                <div class="flex items-center gap-2 pb-1.5 border-b border-brand-border/40">
+                  <div class="w-5 h-5 rounded-md bg-brand-purple flex items-center justify-center text-white text-[10px] font-bold">L</div>
+                  <span class="text-xs font-bold text-white/80">Lovable Engine</span>
+                </div>
+                <div class="text-[9px] text-white/30 uppercase tracking-widest font-mono">Active Project</div>
+                <div class="bg-brand-card border border-brand-border/80 rounded-lg px-3 py-2 text-[10px] text-white/70 truncate flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-brand-purple shadow-glow"></span>
+                  warm-welcome
+                </div>
+                <div class="flex-1"></div>
+                <!-- Mini status widget inside remote browser -->
+                <div class="rounded-xl p-3 bg-brand-card/60 border border-brand-border/60 text-[9px] space-y-2">
+                  <div class="flex items-center gap-2 font-mono">
+                    <span class="w-2.5 h-2.5 rounded-full bg-brand-amber animate-pulse"></span>
+                    <span class="text-white/60">Compiling...</span>
+                  </div>
+                  <div class="w-full bg-brand-black/75 rounded h-1 overflow-hidden">
+                    <div id="mock-progress-bar" class="h-full bg-brand-purple rounded" style="width:15%; transition:width 0.8s ease"></div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <!-- 2. Terminal Logs Console -->
-          <div class="tab-content" id="tab-terminal">
-            <div class="terminal-box" id="terminal-output">
-              <div class="term-line system">> Logs stream initialized.</div>
-            </div>
-          </div>
-
-          <!-- 3. Changed Files list -->
-          <div class="tab-content" id="tab-files">
-            <div class="files-list" id="files-container">
-              <div class="placeholder-state">
-                <span class="placeholder-icon">📂</span>
-                <p>No file modifications recorded in the current build.</p>
+              <!-- Mock Main Panel / Code Editor -->
+              <div class="flex-1 flex flex-col bg-brand-black overflow-hidden">
+                <!-- Editor header tab -->
+                <div class="flex-shrink-0 px-4 py-2.5 border-b border-brand-border/50 bg-brand-panel/30 flex items-center justify-between">
+                  <span class="text-[10px] text-white/45 font-mono flex items-center gap-1.5">
+                    <i data-lucide="file-code" class="w-3.5 h-3.5 text-brand-purple"></i>
+                    src/components/App.tsx
+                  </span>
+                  <div class="flex gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-brand-red/30"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-brand-amber/30"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-brand-green/30"></span>
+                  </div>
+                </div>
+                <!-- Simulated Code timeline stream -->
+                <div class="flex-1 overflow-y-auto p-4.5 font-mono text-[10px] space-y-1.5 text-white/50 leading-relaxed" id="mock-code-stream">
+                  <div class="text-brand-purple/75">import React from 'react';</div>
+                  <div class="text-white/40">const App: React.FC = () => {</div>
+                  <div class="text-white/20 pl-4">// automated-build-handshake active</div>
+                </div>
+                <!-- Chat bubbles at bottom of mock layout -->
+                <div class="p-3 border-t border-brand-border/40 bg-brand-panel/10 space-y-2">
+                  <div class="rounded-xl px-3 py-2 bg-brand-purple/15 border border-brand-purple/35 text-[10px] text-white/80 max-w-[70%] ml-auto font-mono">
+                    Construct a responsive navigation system...
+                  </div>
+                  <div class="rounded-xl px-3 py-2 bg-brand-card/75 border border-brand-border/70 text-[10px] text-white/50 flex items-center gap-2 w-fit">
+                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-brand-purple"></span>
+                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-brand-purple"></span>
+                    <span class="typing-dot w-1.5 h-1.5 rounded-full bg-brand-purple"></span>
+                    <span class="ml-1 font-mono text-[9px]">Lovable is building changes...</span>
+                  </div>
+                </div>
               </div>
+
             </div>
           </div>
 
-          <!-- 4. Playwright Screenshot -->
-          <div class="tab-content" id="tab-screenshot">
-            <div class="screenshot-box" id="screenshot-holder">
-              <div class="placeholder-state">
-                <span class="placeholder-icon">📸</span>
-                <p>Click "Snapshot" below to inspect the backend browser view.</p>
-              </div>
-            </div>
-            <div class="tab-action-bar">
-              <button id="btn-snapshot" class="btn btn-secondary btn-small">Take Live Snapshot</button>
-              <button id="btn-ext-snapshot" class="btn btn-secondary btn-small">Inspect Extensions</button>
-            </div>
-          </div>
+          <!-- Preview frame for successful automation build pages -->
+          <iframe id="preview-iframe" src="" class="absolute inset-0 w-full h-full border-none z-40 hidden bg-white"></iframe>
+
         </div>
-      </section>
 
+      </div>
+
+      <!-- Viewport footer status bar -->
+      <div class="flex-shrink-0 px-5 py-3.5 bg-brand-panel border-t border-brand-border flex items-center justify-between text-[10px] font-mono text-white/30">
+        <div class="flex items-center gap-3">
+          <span id="build-files-count">0 files changed</span>
+          <span>·</span>
+          <span id="build-progress-text">No active task queue</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-white/20" id="last-snapshot-time"></span>
+          <div id="file-ops-ticker" class="flex gap-1.5 overflow-hidden max-w-xs"></div>
+        </div>
+      </div>
     </main>
-  </div>
+
+    <!-- ╔══════════════════════════════════════════════════════════════╗ -->
+    <!-- ║  3. AGENT ACTIVITY LOGS (STREAM PANEL) (RIGHT SIDEBAR)      ║ -->
+    <!-- ╚══════════════════════════════════════════════════════════════╝ -->
+    <aside class="w-96 flex-shrink-0 flex flex-col bg-brand-panel overflow-hidden">
+      
+      <!-- Panel header, tabs and counters -->
+      <div class="flex-shrink-0 border-b border-brand-border">
+        <div class="px-4.5 py-4.5 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i data-lucide="terminal" class="w-4 h-4 text-brand-green"></i>
+            <span class="text-xs font-semibold text-white/70">Console Logs Stream</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-[9px] font-mono bg-brand-black px-2 py-0.5 rounded border border-brand-border text-white/40" id="log-count">0 events</span>
+            <button onclick="clearLogs()" class="text-white/25 hover:text-white/60 transition" title="Clear console">
+              <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Tab selector headers -->
+        <div class="flex px-4.5 gap-1 border-t border-brand-border/40">
+          <button class="tab-btn active text-[10px] font-bold uppercase tracking-wider py-3 px-3 border-b-2 border-brand-purple text-brand-purple" onclick="switchLogTab('logs', this)">System Logs</button>
+          <button class="tab-btn text-[10px] font-bold uppercase tracking-wider py-3 px-3 border-b-2 border-transparent text-white/30 hover:text-white/60 transition" onclick="switchLogTab('chat', this)">Bot Chat</button>
+          <button class="tab-btn text-[10px] font-bold uppercase tracking-wider py-3 px-3 border-b-2 border-transparent text-white/30 hover:text-white/60 transition" onclick="switchLogTab('files', this)">File Delta</button>
+        </div>
+      </div>
+
+      <!-- Tab content panels -->
+      <div class="flex-1 overflow-hidden flex flex-col">
+        
+        <!-- System Logs (Console panel) -->
+        <div id="tab-logs" class="flex-1 overflow-y-auto p-4 space-y-1.5 font-mono text-[10px] log-tab-content">
+          <div class="text-white/25 text-center py-10">Agent Console Idle. Awaiting websocket handshake.</div>
+        </div>
+
+        <!-- Chat interactions -->
+        <div id="tab-chat" class="flex-1 overflow-y-auto p-4 space-y-2.5 log-tab-content hidden">
+          <div class="text-white/25 text-center py-10 text-[10px] font-mono">Chat timeline is empty.</div>
+        </div>
+
+        <!-- File adjustments -->
+        <div id="tab-files" class="flex-1 overflow-y-auto p-4 space-y-2 log-tab-content hidden">
+          <div class="text-white/25 text-center py-10 text-[10px] font-mono">No modified files tracked in current session.</div>
+        </div>
+
+      </div>
+
+      <!-- Quick prompts & dispatch control -->
+      <div class="flex-shrink-0 border-t border-brand-border p-4.5 space-y-3 bg-brand-black/35">
+        <textarea
+          id="quick-prompt"
+          rows="2"
+          placeholder="Type an incremental prompt payload to dispatch..."
+          class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2 text-xs text-white/70 placeholder-white/20 resize-none outline-none focus:border-brand-purple/50 focus:ring-1 focus:ring-brand-purple/20 transition font-mono shadow-inner"
+        ></textarea>
+        <button
+          id="btn-submit"
+          onclick="submitPrompt()"
+          disabled
+          class="w-full py-3 rounded-xl bg-brand-purple hover:bg-violet-600 text-white text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-2 transition disabled:opacity-35 disabled:cursor-not-allowed shadow-glow"
+        >
+          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          <span id="submit-label">Dispatch Payload</span>
+        </button>
+      </div>
+
+    </aside>
+
+  </div><!-- End Main layout -->
+
+  <!-- Application script module -->
   <script src="app.js"></script>
+  <script>lucide.createIcons();</script>
 </body>
 </html>
